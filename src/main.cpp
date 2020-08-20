@@ -17,6 +17,8 @@
 const struct rectangle SITE_AREA = { .min = {0.F, 0.F}, .max = {1024.F, 1024.F} };
 const glm::vec2 CENTER = {512.F, 512.F};
 unsigned char PURPLE[3] = {255, 0, 255};
+unsigned char ORANGE[3] = {255, 155, 0};
+unsigned char GRN[3] = {0, 255, 0};
 
 void print_site(const Sitemap *map) 
 {
@@ -44,6 +46,9 @@ void print_site(const Sitemap *map)
 	for (const auto &w : map->walls) {
 		draw_line(w.P0.x, w.P0.y, w.P1.x, w.P1.y, image.data, image.width, image.height, image.nchannels, PURPLE);
 
+	}
+	for (const auto &ent : map->entrances) {
+		plot(ent->position.x, ent->position.y, image.data, image.width, image.height, image.nchannels, GRN);
 	}
 
 	stbi_flip_vertically_on_write(true);

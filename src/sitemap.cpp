@@ -1,6 +1,7 @@
 #include <iostream>
 #include <random>
 #include <queue>
+#include <algorithm>
 #include <unordered_map>
 #include <list>
 #include <glm/glm.hpp>
@@ -10,6 +11,28 @@
 #include "imp.h"
 #include "voronoi.h"
 #include "sitemap.h"
+
+static const size_t MIN_TOWNGATE_DISTANCE = 9; // minimum distance of wall segments between two town gates 
+
+// checks how "isoscelene" a triangle is by comparing the difference in length of two triangle legs, the smaller the number the more "isoscelene" it is
+static float triangle_isoscelenes(glm::vec2 a, glm::vec2 b, glm::vec2 c)
+{
+	float d0 = glm::distance(a, b);
+	float d1 = glm::distance(b, c);
+
+	float circumfence = d0 + glm::distance(b, c) + d1;
+	return fabs(d0 - d1) / circumfence;
+}
+
+struct meta {
+	const struct junction *j;
+	float iso;
+};
+
+bool lowest(struct meta &a, struct meta &b) 
+{
+	return a.iso < b.iso;
+}
 
 Sitemap::Sitemap(long seed, struct rectangle area)
 {
@@ -59,64 +82,7 @@ Sitemap::Sitemap(long seed, struct rectangle area)
 		j.radius = min;
 	}
 
-	// make the walls
-	std::unordered_map<int, bool> discovered;
-	std::list<struct junction*> chain;
-	for (const auto &j : junctions) {
-		discovered[j.index] = false;
-	}
-	for (auto &sect : sections) {
-		if (sect.j0->radius == 2 && sect.j1->radius == 2 && discovered[sect.j0->index] == false && discovered[sect.j1->index] == false) {
-			discovered[sect.j0->index] = true;
-			discovered[sect.j1->index] = true;
-			std::list<struct junction*> queue;
-			chain.push_back(sect.j0);
-			chain.push_front(sect.j1);
-			queue.push_back(sect.j0);
-			while (!queue.empty()) {
-				struct junction *node = queue.front();
-				queue.pop_front();
-				for (auto neighbor : node->adjacent) {
-					if (discovered[neighbor->index] == false && neighbor->radius == 2) {
-						discovered[neighbor->index] = true;
-						queue.push_back(neighbor);
-						chain.push_back(neighbor);
-					}
-				}
-			}
-		}
-	}
-
-	for (std::list<struct junction*>::iterator it = chain.begin(); it != chain.end(); ++it) {
-		auto nx = std::next(it);
-		if (nx == chain.end()) {
-			nx = chain.begin();
-		}
-		auto nxnx = std::next(nx);
-		const struct junction *a = *it;
-		const struct junction *b = *nx;
-		const struct junction *c = *nxnx;
-		// check if the triangle points "inside"
-		int total = 0;
-		for (auto d : b->districts) {
-			total += d->radius;
-		}
-		if (total < 8) {
-			it = chain.erase(nx);
-		}
-	}
-	for (std::list<struct junction*>::iterator it = chain.begin(); it != chain.end(); ++it) {
-		auto nx = std::next(it);
-		if (nx == chain.end()) {
-			nx = chain.begin();
-		}
-
-		const struct junction *j = *it;
-		const struct junction *nxj = *nx;
-
-		struct segment S = { j->position, nxj->position };
-		walls.push_back(S);
-	}
+	outline_walls();
 }
 
 void Sitemap::adapt_diagram(void)
@@ -210,5 +176,108 @@ void Sitemap::adapt_diagram(void)
 			sections[index].j0->border = true;
 			sections[index].j1->border = true;
 		}
+	}
+}
+
+void Sitemap::outline_walls(void)
+{
+	// make the walls
+	std::unordered_map<int, bool> discovered;
+	std::list<struct junction*> chain;
+	for (const auto &j : junctions) {
+		discovered[j.index] = false;
+	}
+	for (auto &sect : sections) {
+		if (sect.j0->radius == 2 && sect.j1->radius == 2 && discovered[sect.j0->index] == false && discovered[sect.j1->index] == false) {
+			discovered[sect.j0->index] = true;
+			discovered[sect.j1->index] = true;
+			std::list<struct junction*> queue;
+			chain.push_back(sect.j0);
+			chain.push_front(sect.j1);
+			queue.push_back(sect.j0);
+			while (!queue.empty()) {
+				struct junction *node = queue.front();
+				queue.pop_front();
+				for (auto neighbor : node->adjacent) {
+					if (discovered[neighbor->index] == false && neighbor->radius == 2) {
+						discovered[neighbor->index] = true;
+						queue.push_back(neighbor);
+						chain.push_back(neighbor);
+					}
+				}
+			}
+		}
+	}
+
+	std::vector<struct meta> data;
+	for (std::list<struct junction*>::iterator it = chain.begin(); it != chain.end(); ++it) {
+		auto nx = std::next(it);
+		if (nx == chain.end()) {
+			nx = chain.begin();
+		}
+		auto nxnx = std::next(nx);
+		if (nxnx == chain.end()) {
+			nxnx = chain.begin();
+		}
+		const struct junction *a = *it;
+		const struct junction *b = *nx;
+		const struct junction *c = *nxnx;
+		float iso = triangle_isoscelenes(a->position, b->position, c->position);
+		// check if the triangle points "inside"
+		int total = 0;
+		for (auto d : b->districts) {
+			total += d->radius;
+		}
+		if (total < 8) {
+			if (iso < 0.5F) {
+				data.push_back((struct meta) {b, iso});
+			}
+			it = chain.erase(nx);
+			it = std::prev(it);
+		}
+	}
+
+	// reset discovered
+	std::unordered_map<int, int> depth;
+	for (const auto &j : junctions) {
+		discovered[j.index] = false;
+		depth[j.index] = 0;
+	}
+	std::sort(data.begin(), data.end(), lowest);
+	for (auto &d : data) {
+		if (discovered[d.j->index] == false) {
+			discovered[d.j->index] = true;
+			entrances.push_back(d.j);
+			std::queue<const struct junction*> queue;
+			queue.push(d.j);
+			while (!queue.empty()) {
+				const struct junction *node = queue.front();
+				queue.pop();
+				int layer = depth[node->index] + 1;
+				if (layer > MIN_TOWNGATE_DISTANCE) {
+					break;
+				}
+				for (auto neighbor : node->adjacent) {
+					if (neighbor->radius == 2 && discovered[neighbor->index] == false) {
+						discovered[neighbor->index] = true;
+						depth[neighbor->index] = layer;
+						queue.push(neighbor);
+					}
+				}
+			}
+		}
+	}
+
+	for (std::list<struct junction*>::iterator it = chain.begin(); it != chain.end(); ++it) {
+		auto nx = std::next(it);
+		if (nx == chain.end()) {
+			nx = chain.begin();
+		}
+
+		const struct junction *j = *it;
+		const struct junction *nxj = *nx;
+
+		struct segment S = { j->position, nxj->position };
+		walls.push_back(S);
 	}
 }

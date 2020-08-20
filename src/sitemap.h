@@ -38,10 +38,13 @@ public:
 	std::vector<struct junction> junctions;
 	std::vector<struct section> sections;
 	std::vector<struct segment> walls;
+	std::vector<const struct junction*> entrances;
 public:
 	Sitemap(long seed, struct rectangle area);
 	void adapt_diagram(void);
 private:
 	long seed;
 	struct rectangle area;
+private:
+	void outline_walls(void);
 };
