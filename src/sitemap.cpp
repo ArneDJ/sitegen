@@ -79,7 +79,7 @@ Sitemap::Sitemap(long seed, struct rectangle area)
 	adapt_diagram();
 
 	std::unordered_map<int, bool> visited;
-	struct district *centerdistrict;
+	//struct district *centerdistrict;
 	float min = glm::distance(this->area.min, this->area.max);
 	glm::vec2 center = 0.5f * this->area.max;
 
@@ -89,13 +89,13 @@ Sitemap::Sitemap(long seed, struct rectangle area)
 		float dist = glm::distance(center, d.center);
 		if (dist < min) {
 			min = dist;
-			centerdistrict = &d;
+			towncenter = &d;
 		}
 	}
 
 	std::queue<const struct district*> queue;
-	queue.push(centerdistrict);
-	visited[centerdistrict->index] = true;
+	queue.push(towncenter);
+	visited[towncenter->index] = true;
 	while (!queue.empty()) {
 		const struct district *node = queue.front();
 		queue.pop();
@@ -122,6 +122,8 @@ Sitemap::Sitemap(long seed, struct rectangle area)
 	}
 
 	outline_walls();
+
+	make_highways();
 }
 
 void Sitemap::adapt_diagram(void)
@@ -316,5 +318,95 @@ void Sitemap::outline_walls(void)
 
 		struct segment S = { j->position, nxj->position };
 		walls.push_back(S);
+	}
+}
+
+void Sitemap::make_highways(void)
+{
+	std::unordered_map<int, bool> visited;
+	std::unordered_map<int, int> depth;
+	for (const auto &j : junctions) {
+		visited[j.index] = false;
+		depth[j.index] = 0;
+	}
+	for (const auto &root : towncenter->junctions) {
+		visited[root->index] = true;
+	}
+
+	for (const auto &root : towncenter->junctions) {
+		std::queue<const struct junction*> queue;
+		queue.push(root);
+		while (!queue.empty()) {
+			const struct junction *node = queue.front();
+			queue.pop();
+			int layer = depth[node->index] + 1;
+			for (auto neighbor : node->adjacent) {
+				if (visited[neighbor->index] == false) {
+					visited[neighbor->index] = true;
+					depth[neighbor->index] = layer;
+					queue.push(neighbor);
+				} else if (depth[neighbor->index] > layer) {
+					depth[neighbor->index] = layer;
+					queue.push(neighbor);
+				}
+			}
+		}
+	}
+	for (auto &gate : towngates) {
+		std::queue<const struct junction*> queue;
+		queue.push(gate.inward);
+		while (!queue.empty()) {
+			const struct junction *node = queue.front();
+			queue.pop();
+			for (auto neighbor : node->adjacent) {
+				if (depth[neighbor->index] < depth[node->index]) {
+					queue.push(neighbor);
+					highways.push_back((struct segment) {node->position, neighbor->position});
+					break;
+				}
+			}
+		}
+	}
+
+	// reset
+	for (const auto &j : junctions) {
+		visited[j.index] = j.border;
+		depth[j.index] = 0;
+	}
+	for (const auto &root : junctions) {
+		if (root.border == true) {
+			std::queue<const struct junction*> queue;
+			queue.push(&root);
+			while (!queue.empty()) {
+				const struct junction *node = queue.front();
+				queue.pop();
+				int layer = depth[node->index] + 1;
+				for (auto neighbor : node->adjacent) {
+					if (visited[neighbor->index] == false) {
+						visited[neighbor->index] = true;
+						depth[neighbor->index] = layer;
+						queue.push(neighbor);
+					} else if (depth[neighbor->index] > layer) {
+						depth[neighbor->index] = layer;
+						queue.push(neighbor);
+					}
+				}
+			}
+		}
+	}
+	for (auto &gate : towngates) {
+		std::queue<const struct junction*> queue;
+		queue.push(gate.outward);
+		while (!queue.empty()) {
+			const struct junction *node = queue.front();
+			queue.pop();
+			for (auto neighbor : node->adjacent) {
+				if (depth[neighbor->index] < depth[node->index]) {
+					queue.push(neighbor);
+					highways.push_back((struct segment) {node->position, neighbor->position});
+					break;
+				}
+			}
+		}
 	}
 }

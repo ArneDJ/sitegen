@@ -47,6 +47,8 @@ public:
 	std::vector<struct segment> walls;
 	std::vector<const struct junction*> entrances;
 	std::vector<struct towngate> towngates;
+	std::vector<struct segment> highways;
+	struct district *towncenter;
 public:
 	Sitemap(long seed, struct rectangle area);
 	void adapt_diagram(void);
@@ -55,4 +57,5 @@ private:
 	struct rectangle area;
 private:
 	void outline_walls(void);
+	void make_highways(void);
 };
