@@ -38,6 +38,9 @@ void print_site(const Sitemap *map)
 		}
 	}
 
+	for (const auto &sect : map->sections) {
+		draw_line(sect.j0->position.x, sect.j0->position.y, sect.j1->position.x, sect.j1->position.y, image.data, image.width, image.height, image.nchannels, ORANGE);
+	}
 	for (const auto &j : map->junctions) {
 		if (j.radius == 2) {
 			plot(j.position.x, j.position.y, image.data, image.width, image.height, image.nchannels, PURPLE);
@@ -47,8 +50,13 @@ void print_site(const Sitemap *map)
 		draw_line(w.P0.x, w.P0.y, w.P1.x, w.P1.y, image.data, image.width, image.height, image.nchannels, PURPLE);
 
 	}
-	for (const auto &ent : map->entrances) {
-		plot(ent->position.x, ent->position.y, image.data, image.width, image.height, image.nchannels, GRN);
+	for (const auto &gate : map->towngates) {
+		//plot(ent->position.x, ent->position.y, image.data, image.width, image.height, image.nchannels, GRN);
+		glm::vec2 gatepoint = segment_midpoint(gate.wall.P0, gate.wall.P1);
+		draw_line(gate.wall.P0.x, gate.wall.P0.y, gate.wall.P1.x, gate.wall.P1.y, image.data, image.width, image.height, image.nchannels, GRN);
+		//draw_line(gate.inward->position.x, gate.inward->position.y, gate.outward->position.x, gate.outward->position.y, image.data, image.width, image.height, image.nchannels, GRN);
+		draw_line(gate.inward->position.x, gate.inward->position.y, gatepoint.x, gatepoint.y, image.data, image.width, image.height, image.nchannels, GRN);
+		draw_line(gate.outward->position.x, gate.outward->position.y, gatepoint.x, gatepoint.y, image.data, image.width, image.height, image.nchannels, GRN);
 	}
 
 	stbi_flip_vertically_on_write(true);

@@ -20,6 +20,7 @@ struct junction {
 	std::vector<struct district*> districts;
 	bool border;
 	int radius;
+	bool wallcandidate;
 };
 
 struct district {
@@ -32,6 +33,12 @@ struct district {
 	int radius; // distance to center in graph structure
 };
 
+struct towngate {
+	const struct junction *inward;
+	const struct junction *outward;
+	struct segment wall;
+};
+
 class Sitemap {
 public:
 	std::vector<struct district> districts;
@@ -39,6 +46,7 @@ public:
 	std::vector<struct section> sections;
 	std::vector<struct segment> walls;
 	std::vector<const struct junction*> entrances;
+	std::vector<struct towngate> towngates;
 public:
 	Sitemap(long seed, struct rectangle area);
 	void adapt_diagram(void);
