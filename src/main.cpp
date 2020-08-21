@@ -99,16 +99,36 @@ void print_site(const Sitemap *map)
 	}
 	for (const auto &d : map->districts) {
 		if (d.radius < 3 && d.radius > 0) {
-			int count = 0;
+			float max = 0.f;
+			const struct section *longest;
 			for (const auto &s : d.sections) {
-				if (s->j0-> radius < 8 || s->j1->radius < 8) {
-				if (count % 2 == 0) {
-				glm::vec2 mid = segment_midpoint(s->j0->position, s->j1->position);
-				draw_thick_line(d.center.x, d.center.y, mid.x, mid.y, 3, image.data, image.width, image.height, image.nchannels, ORANGE);
-				}
-				count++;
+				if (s->j0-> radius < 7 || s->j1->radius < 7) {
+					glm::vec2 mid = segment_midpoint(s->j0->position, s->j1->position);
+					float dist = glm::distance(s->j0->position, s->j1->position);
+					if (dist > max) {
+						max = dist;
+						longest = s;
+					}
 				}
 			}
+			glm::vec2 mad = segment_midpoint(longest->j0->position, longest->j1->position);
+			glm::vec2 tjunction = glm::normalize(d.center - mad);
+			draw_thick_line(d.center.x, d.center.y, mad.x, mad.y, 3, image.data, image.width, image.height, image.nchannels, ORANGE);
+			const struct section *coolest;
+			float mindot = 1.f;
+			for (const auto &s : d.sections) {
+				if (s->j0-> radius < 7 || s->j1->radius < 7) {
+					glm::vec2 mid = segment_midpoint(s->j0->position, s->j1->position);
+					glm::vec2 cool = glm::normalize(d.center - mid);
+					float dot = glm::dot(tjunction, cool);
+					if (dot < mindot) {
+						mindot = dot;
+						coolest = s;
+					}
+				}
+			}
+			glm::vec2 mod = segment_midpoint(coolest->j0->position, coolest->j1->position);
+			draw_thick_line(d.center.x, d.center.y, mod.x, mod.y, 3, image.data, image.width, image.height, image.nchannels, ORANGE);
 		}
 	}
 
