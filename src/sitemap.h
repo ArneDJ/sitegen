@@ -37,6 +37,7 @@ struct towngate {
 	const struct junction *inward;
 	const struct junction *outward;
 	struct segment wall;
+	glm::vec2 gatepoint;
 };
 
 class Sitemap {

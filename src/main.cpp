@@ -78,15 +78,20 @@ void print_site(const Sitemap *map)
 	for (const auto &d : map->districts) {
 		glm::vec2 a = {round(d.center.x), round(d.center.y)};
 		float gradient = 1.f - (d.radius / 8.f);
-		color[0] = 255 * gradient;
-		color[1] = 255 * gradient;
-		color[2] = 255 * gradient;
+		color[0] = 200;
+		color[1] = 200;
+		color[2] = 200;
 		for (const auto &s : d.sections) {
 			glm::vec2 b = {round(s->j0->position.x), round(s->j0->position.y)};
 			glm::vec2 c = {round(s->j1->position.x), round(s->j1->position.y)};
 			draw_triangle(a, b, c, image.data, image.width, image.height, image.nchannels, color);
 		}
 	}
+	/*
+	for (const auto &sect : map->sections) {
+		draw_thick_line(sect.j0->position.x, sect.j0->position.y, sect.j1->position.x, sect.j1->position.y, 1, image.data, image.width, image.height, image.nchannels, GRN);
+	}
+	*/
 
 	draw_filled_circle(map->towncenter->center.x, map->towncenter->center.y, 16, image.data, image.width, image.height, image.nchannels, BLACK);
 	// draw town streets
@@ -98,7 +103,7 @@ void print_site(const Sitemap *map)
 		}
 	}
 	for (const auto &d : map->districts) {
-		if (d.radius < 3 && d.radius > 0) {
+		if (d.radius < 3) {
 			float max = 0.f;
 			const struct section *longest;
 			for (const auto &s : d.sections) {
@@ -117,7 +122,7 @@ void print_site(const Sitemap *map)
 			const struct section *coolest;
 			float mindot = 1.f;
 			for (const auto &s : d.sections) {
-				if (s->j0-> radius < 7 || s->j1->radius < 7) {
+				if (s->j0-> radius < 8 || s->j1->radius < 8) {
 					glm::vec2 mid = segment_midpoint(s->j0->position, s->j1->position);
 					glm::vec2 cool = glm::normalize(d.center - mid);
 					float dot = glm::dot(tjunction, cool);
@@ -132,21 +137,26 @@ void print_site(const Sitemap *map)
 		}
 	}
 
-	for (const auto &w : map->walls) {
-		draw_thick_line(w.P0.x, w.P0.y, w.P1.x, w.P1.y, 6, image.data, image.width, image.height, image.nchannels, GRAY);
-		draw_filled_circle(w.P0.x, w.P0.y, 12, image.data, image.width, image.height, image.nchannels, GRAY);
+	if (map->towngates.size() > 0) {
+		for (const auto &w : map->walls) {
+			draw_thick_line(w.P0.x, w.P0.y, w.P1.x, w.P1.y, 6, image.data, image.width, image.height, image.nchannels, GRAY);
+			draw_filled_circle(w.P0.x, w.P0.y, 12, image.data, image.width, image.height, image.nchannels, GRAY);
 
+		}
 	}
 	for (const auto &gate : map->towngates) {
 		//plot(ent->position.x, ent->position.y, image.data, image.width, image.height, image.nchannels, GRN);
 		glm::vec2 gatepoint = segment_midpoint(gate.wall.P0, gate.wall.P1);
-		//draw_line(gate.wall.P0.x, gate.wall.P0.y, gate.wall.P1.x, gate.wall.P1.y, image.data, image.width, image.height, image.nchannels, GRN);
-		//draw_line(gate.inward->position.x, gate.inward->position.y, gate.outward->position.x, gate.outward->position.y, image.data, image.width, image.height, image.nchannels, GRN);
 		draw_thick_line(gate.inward->position.x, gate.inward->position.y, gatepoint.x, gatepoint.y, 4, image.data, image.width, image.height, image.nchannels, ORANGE);
 		draw_thick_line(gate.outward->position.x, gate.outward->position.y, gatepoint.x, gatepoint.y, 4, image.data, image.width, image.height, image.nchannels, ORANGE);
 	}
 	for (const auto &highway : map->highways) {
 		draw_thick_line(highway.P0.x, highway.P0.y, highway.P1.x, highway.P1.y, 4, image.data, image.width, image.height, image.nchannels, ORANGE);
+	}
+	for (const auto &gate : map->towngates) {
+		draw_filled_circle(gate.gatepoint.x, gate.gatepoint.y, 4, image.data, image.width, image.height, image.nchannels, GRN);
+		draw_filled_circle(gate.outward->position.x, gate.outward->position.y, 4, image.data, image.width, image.height, image.nchannels, PURPLE);
+		draw_filled_circle(gate.inward->position.x, gate.inward->position.y, 4, image.data, image.width, image.height, image.nchannels, PURPLE);
 	}
 
 	stbi_flip_vertically_on_write(true);
@@ -162,8 +172,15 @@ int main(int argc, char *argv[])
 	std::random_device rd;
 	std::mt19937 gen(rd());
 	std::uniform_int_distribution<long> dist;
+	long seed = dist(gen);
+	//long seed = 3727691146686937946;
+	//long seed = 4113878335958006304;
+	//long seed = 2316795901405886390;
+	//long seed = 2239270435339243048;
 
-	Sitemap sitemap = {dist(gen), SITE_AREA};
+	std::cout << seed << std::endl;
+
+	Sitemap sitemap = {seed, SITE_AREA};
 
 	print_site(&sitemap);
 
