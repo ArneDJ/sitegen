@@ -12,6 +12,7 @@ struct section {
 	struct district *d1 = nullptr;
 	bool border;
 	bool wall;
+	float area;
 };
 
 struct junction {

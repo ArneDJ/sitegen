@@ -21,6 +21,7 @@ unsigned char ORANGE[3] = {255, 150, 0};
 unsigned char GRAY[3] = {112, 112, 112};
 unsigned char BLACK[3] = {0, 0, 0};
 unsigned char GRN[3] = {0, 255, 0};
+unsigned char YELLOW[3] = {255, 255, 0};
 
 void draw_filled_circle(int x0, int y0, int radius, unsigned char *image, int width, int height, int nchannels, unsigned char *color)
 {
@@ -70,101 +71,6 @@ void draw_thick_line(int x0, int y0, int x1, int y1, int radius, unsigned char *
 	}
 }
 
-/*
-void print_site(const Sitemap *map) 
-{
-	struct byteimage image = blank_byteimage(3, 1024, 1024);
-
-	unsigned char color[3] = {255, 255, 255};
-	for (const auto &d : map->districts) {
-		glm::vec2 a = {round(d.center.x), round(d.center.y)};
-		float gradient = 1.f - (d.radius / 8.f);
-		color[0] = 200;
-		color[1] = 200;
-		color[2] = 200;
-		for (const auto &s : d.sections) {
-			glm::vec2 b = {round(s->j0->position.x), round(s->j0->position.y)};
-			glm::vec2 c = {round(s->j1->position.x), round(s->j1->position.y)};
-			draw_triangle(a, b, c, image.data, image.width, image.height, image.nchannels, color);
-		}
-	}
-	for (const auto &sect : map->sections) {
-		draw_thick_line(sect.j0->position.x, sect.j0->position.y, sect.j1->position.x, sect.j1->position.y, 1, image.data, image.width, image.height, image.nchannels, GRN);
-	}
-
-	draw_filled_circle(map->towncenter->center.x, map->towncenter->center.y, 16, image.data, image.width, image.height, image.nchannels, BLACK);
-	// draw town streets
-	for (const auto &sect : map->sections) {
-		if (sect.j0->radius < 8 || sect.j1->radius < 8) {
-			if (sect.j0->border == false && sect.j1->border == false) {
-				draw_thick_line(sect.j0->position.x, sect.j0->position.y, sect.j1->position.x, sect.j1->position.y, 3, image.data, image.width, image.height, image.nchannels, ORANGE);
-			}
-		}
-	}
-	for (const auto &d : map->districts) {
-		if (d.radius < 3) {
-			float max = 0.f;
-			const struct section *longest;
-			for (const auto &s : d.sections) {
-				if (s->j0-> radius < 7 || s->j1->radius < 7) {
-					glm::vec2 mid = segment_midpoint(s->j0->position, s->j1->position);
-					float dist = glm::distance(s->j0->position, s->j1->position);
-					if (dist > max) {
-						max = dist;
-						longest = s;
-					}
-				}
-			}
-			glm::vec2 mad = segment_midpoint(longest->j0->position, longest->j1->position);
-			glm::vec2 tjunction = glm::normalize(d.center - mad);
-			draw_thick_line(d.center.x, d.center.y, mad.x, mad.y, 3, image.data, image.width, image.height, image.nchannels, ORANGE);
-			const struct section *coolest;
-			float mindot = 1.f;
-			for (const auto &s : d.sections) {
-				if (s->j0-> radius < 8 || s->j1->radius < 8) {
-					glm::vec2 mid = segment_midpoint(s->j0->position, s->j1->position);
-					glm::vec2 cool = glm::normalize(d.center - mid);
-					float dot = glm::dot(tjunction, cool);
-					if (dot < mindot) {
-						mindot = dot;
-						coolest = s;
-					}
-				}
-			}
-			glm::vec2 mod = segment_midpoint(coolest->j0->position, coolest->j1->position);
-			draw_thick_line(d.center.x, d.center.y, mod.x, mod.y, 3, image.data, image.width, image.height, image.nchannels, ORANGE);
-		}
-	}
-
-	if (map->towngates.size() > 0) {
-		for (const auto &w : map->walls) {
-			draw_thick_line(w.P0.x, w.P0.y, w.P1.x, w.P1.y, 6, image.data, image.width, image.height, image.nchannels, GRAY);
-			draw_filled_circle(w.P0.x, w.P0.y, 12, image.data, image.width, image.height, image.nchannels, GRAY);
-
-		}
-	}
-	for (const auto &gate : map->towngates) {
-		//plot(ent->position.x, ent->position.y, image.data, image.width, image.height, image.nchannels, GRN);
-		glm::vec2 gatepoint = segment_midpoint(gate.wall.P0, gate.wall.P1);
-		draw_thick_line(gate.inward->position.x, gate.inward->position.y, gatepoint.x, gatepoint.y, 4, image.data, image.width, image.height, image.nchannels, ORANGE);
-		draw_thick_line(gate.outward->position.x, gate.outward->position.y, gatepoint.x, gatepoint.y, 4, image.data, image.width, image.height, image.nchannels, ORANGE);
-	}
-	for (const auto &highway : map->highways) {
-		draw_thick_line(highway.P0.x, highway.P0.y, highway.P1.x, highway.P1.y, 4, image.data, image.width, image.height, image.nchannels, ORANGE);
-	}
-	for (const auto &gate : map->towngates) {
-		draw_filled_circle(gate.gatepoint.x, gate.gatepoint.y, 4, image.data, image.width, image.height, image.nchannels, GRN);
-		draw_filled_circle(gate.outward->position.x, gate.outward->position.y, 4, image.data, image.width, image.height, image.nchannels, PURPLE);
-		draw_filled_circle(gate.inward->position.x, gate.inward->position.y, 4, image.data, image.width, image.height, image.nchannels, PURPLE);
-	}
-
-	stbi_flip_vertically_on_write(true);
-	stbi_write_png("diagram.png", image.width, image.height, image.nchannels, image.data, image.width*image.nchannels);
-
-	delete_byteimage(&image);
-}
-*/
-
 void print_site(const Sitemap *map) 
 {
 	struct byteimage image = blank_byteimage(3, 1024, 1024);
@@ -198,26 +104,27 @@ void print_site(const Sitemap *map)
 			draw_filled_circle(d.center.x, d.center.y, 12, image.data, image.width, image.height, image.nchannels, GRAY);
 		}
 	}
-	/*
-	for (std::list<struct district*>::iterator it = map->walls.begin(); it != map->walls.end(); ++it) {
-		auto nx = std::next(it);
-		if (nx == map->walls.end()) {
-			nx = map->walls.begin();
-		}
-
-		const struct district *d = *it;
-		const struct district *nxd = *nx;
-
-		draw_thick_line(d->center.x, d->center.y, nxd->center.x, nxd->center.y, 6, image.data, image.width, image.height, image.nchannels, GRAY);
-		draw_filled_circle(d->center.x, d->center.y, 12, image.data, image.width, image.height, image.nchannels, GRAY);
-
-	}
-	*/
 	for (const auto &sect : map->sections) {
 		draw_thick_line(sect.j0->position.x, sect.j0->position.y, sect.j1->position.x, sect.j1->position.y, 1, image.data, image.width, image.height, image.nchannels, GRN);
 	}
 
 	draw_filled_circle(map->core->center.x, map->core->center.y, 4, image.data, image.width, image.height, image.nchannels, BLACK);
+
+	for (const auto &sect : map->sections) {
+		if (sect.wall && sect.area > 9000.f) {
+			draw_thick_line(sect.d0->center.x, sect.d0->center.y, sect.d1->center.x, sect.d1->center.y, 6, image.data, image.width, image.height, image.nchannels, GRAY);
+			glm::vec2 outward = segment_midpoint(sect.d0->center, sect.d1->center);
+			glm::vec2 right = sect.d0->center - outward;
+			glm::vec2 a = sect.j0->position - right;;
+			glm::vec2 b = sect.j0->position + right;;
+			glm::vec2 c = sect.j1->position - right;;
+			glm::vec2 d = sect.j1->position + right;;
+			draw_thick_line(a.x, a.y, b.x, b.y, 1, image.data, image.width, image.height, image.nchannels, YELLOW);
+			draw_thick_line(c.x, c.y, d.x, d.y, 1, image.data, image.width, image.height, image.nchannels, YELLOW);
+			draw_thick_line(a.x, a.y, c.x, c.y, 1, image.data, image.width, image.height, image.nchannels, YELLOW);
+			draw_thick_line(b.x, b.y, d.x, d.y, 1, image.data, image.width, image.height, image.nchannels, YELLOW);
+		}
+	}
 
 	stbi_flip_vertically_on_write(true);
 	stbi_write_png("diagram.png", image.width, image.height, image.nchannels, image.data, image.width*image.nchannels);
