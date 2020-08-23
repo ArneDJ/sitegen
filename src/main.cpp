@@ -173,10 +173,6 @@ int main(int argc, char *argv[])
 	std::mt19937 gen(rd());
 	std::uniform_int_distribution<long> dist;
 	long seed = dist(gen);
-	//long seed = 3727691146686937946;
-	//long seed = 4113878335958006304;
-	//long seed = 2316795901405886390;
-	//long seed = 2239270435339243048;
 
 	std::cout << seed << std::endl;
 
