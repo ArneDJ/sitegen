@@ -11,7 +11,6 @@ struct section {
 	struct district *d0 = nullptr;
 	struct district *d1 = nullptr;
 	bool border;
-	bool wall;
 };
 
 struct junction {
@@ -32,8 +31,13 @@ struct district {
 	std::vector<struct section*> sections;
 	bool border;
 	int radius; // distance to center in graph structure
-	float area;
-	bool wall;
+};
+
+struct towngate {
+	const struct junction *inward;
+	const struct junction *outward;
+	struct segment wall;
+	glm::vec2 gatepoint;
 };
 
 class Sitemap {
@@ -41,14 +45,18 @@ public:
 	std::vector<struct district> districts;
 	std::vector<struct junction> junctions;
 	std::vector<struct section> sections;
-	struct district *core;
+	std::vector<struct segment> walls;
+	std::vector<const struct junction*> entrances;
+	std::vector<struct towngate> towngates;
+	std::vector<struct segment> highways;
+	struct district *towncenter;
 public:
 	Sitemap(long seed, struct rectangle area);
-	void make_diagram(void);
-	void make_districts(void);
-	void find_junction_radius(void);
-	void outline_walls(void);
+	void adapt_diagram(void);
 private:
 	long seed;
 	struct rectangle area;
+private:
+	void outline_walls(void);
+	void make_highways(void);
 };

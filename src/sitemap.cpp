@@ -12,146 +12,38 @@
 #include "voronoi.h"
 #include "sitemap.h"
 
-static const size_t MIN_TOWNGATE_DISTANCE = 6; // minimum distance of wall segments between two town gates 
-static const float MIN_GATEWALL_DISTANCE = 90.F;
-static const float MIN_INWARD_AREA = 1500.F;
-
-// checks how "isoscelene" a triangle is by comparing the difference in length of two triangle legs, the smaller the number the more "isoscelene" it is
-static float triangle_isoscelenes(glm::vec2 a, glm::vec2 b, glm::vec2 c)
-{
-	float d0 = glm::distance(a, b);
-	float d1 = glm::distance(b, c);
-
-	float circumfence = d0 + glm::distance(b, c) + d1;
-	return fabs(d0 - d1) / circumfence;
-}
-
-float triangle_area(glm::vec2 a, glm::vec2 b, glm::vec2 c)
-{
-	float area = ((b.x - a.x)*(c.y - a.y) - (c.x - a.x)*(b.y - a.y))/2.0;
-	return (area > 0.0) ? area : -area;
-}
-
-struct meta {
-	const struct junction *j;
-	const struct junction *prev;
-	const struct junction *next;
-	float iso;
-};
-
-bool lowest(struct meta &a, struct meta &b) 
-{
-	return a.iso < b.iso;
-}
-
-bool highest_area(struct meta &a, struct meta &b) 
-{
-	return triangle_area(a.j->position, a.prev->position, a.next->position) > triangle_area(b.j->position, b.prev->position, b.next->position);
-}
-
-static struct towngate make_gate(const struct meta *data)
-{
-	struct towngate gate;
-	gate.inward = data->j;
-	gate.outward = nullptr;
-
-	int max = 0;
-	struct district *cell;
-	for (const auto d : data->j->districts) {
-		if (d->radius > max) {
-			max = d->radius;
-			cell = d;
-		}
-	}
-
-	gate.wall = {data->prev->position, data->next->position};
-	gate.gatepoint = segment_midpoint(gate.wall.P0, gate.wall.P1);
-
-	float mindot = 1.f;
-	glm::vec2 a = glm::normalize(gate.wall.P0 - gate.gatepoint);
-	for (const auto j : cell->junctions) {
-		if (j != data->j && j != data->prev && j != data->next && j->wallcandidate == false) {
-			glm::vec2 b = glm::normalize(j->position - gate.gatepoint);
-			float dotp = glm::dot(a, b);
-			float dist = fabs(dotp);
-			if (dist < mindot && dist < 0.5F) {
-				mindot = dist;
-				gate.outward = j;
-			}
-		}
-	}
-
-	return gate;
-}
+static const size_t MAX_CELLS = 128;
+static const size_t VILLAGE_DISTRICT_RADIUS = 2;
+static const size_t TOWN_DISTRICT_RADIUS = 3;
+static const size_t FIELD_DISTRICT_RADIUS = 5;
 
 Sitemap::Sitemap(long seed, struct rectangle area)
 {
 	this->seed = seed;
 	this->area = area;
 
-	adapt_diagram();
+	make_diagram();
 
-	std::unordered_map<int, bool> visited;
-	//struct district *centerdistrict;
-	float min = glm::distance(this->area.min, this->area.max);
-	glm::vec2 center = 0.5f * this->area.max;
+	make_districts();
 
-	for (auto &d : districts) {
-		d.radius = 0;
-		visited[d.index] = false;
-		float dist = glm::distance(center, d.center);
-		if (dist < min) {
-			min = dist;
-			towncenter = &d;
-		}
-	}
-
-	std::queue<const struct district*> queue;
-	queue.push(towncenter);
-	visited[towncenter->index] = true;
-	while (!queue.empty()) {
-		const struct district *node = queue.front();
-		queue.pop();
-		int depth = node->radius + 1;
-		for (auto neighbor : node->neighbors) {
-			if (visited[neighbor->index] == false) {
-				visited[neighbor->index] = true;
-				neighbor->radius = depth;
-				queue.push(neighbor);
-			}
-		}
-	}
-
-	for (auto &j : junctions) {
-		j.radius = 0;
-		for (const auto &d : j.districts) {
-			j.radius += d->radius;
-		}
-		if (j.radius > 6 && j.radius < 9 && j.border == false) {
-			j.wallcandidate = true;
-		} else {
-			j.wallcandidate = false;
-		}
-	}
+	find_junction_radius();
 
 	outline_walls();
-
-	make_highways();
 }
 
-void Sitemap::adapt_diagram(void)
+void Sitemap::make_diagram(void)
 {
 	std::mt19937 gen(seed);
 	std::uniform_real_distribution<float> dist_x(area.min.x, area.max.x);
 	std::uniform_real_distribution<float> dist_y(area.min.y, area.max.y);
 
-	std::vector<glm::vec2> points;
-	for (int i = 0; i < 128; i++) {
-		points.push_back((glm::vec2) {dist_x(gen), dist_y(gen)});
+	std::vector<glm::vec2> locations;
+	for (int i = 0; i < MAX_CELLS; i++) {
+		locations.push_back((glm::vec2) {dist_x(gen), dist_y(gen)});
 	}
 
 	Voronoi voronoi;
-	voronoi.gen_diagram(points, area.min, area.max, true);
+	voronoi.gen_diagram(locations, area.min, area.max, true);
 
 	districts.resize(voronoi.cells.size());
 	junctions.resize(voronoi.vertices.size());
@@ -178,7 +70,10 @@ void Sitemap::adapt_diagram(void)
 			.neighbors = dneighbors,
 			.junctions = djunctions,
 			.sections = dsections,
-			.border = false
+			.border = false,
+			.radius = 0,
+			.area = 0.f,
+			.wall = false,
 		};
 
 		districts[cell.index] = d;
@@ -212,6 +107,7 @@ void Sitemap::adapt_diagram(void)
 		sections[index].j0 = &junctions[edge.v0->index];
 		sections[index].j1 = &junctions[edge.v1->index];
 		sections[index].border = false;
+		sections[index].wall = false;
 		if (edge.c0 != nullptr) {
 			sections[index].d0 = &districts[edge.c0->index];
 		} else {
@@ -231,221 +127,94 @@ void Sitemap::adapt_diagram(void)
 			sections[index].j1->border = true;
 		}
 	}
+
+	for (auto &d : districts) {
+		d. area = 0.f;
+		for (const auto &s : d.sections) {
+			d.area += triangle_area(d.center, s->j0->position, s->j1->position);
+		}
+	}
 }
 
-void Sitemap::outline_walls(void)
+void Sitemap::make_districts(void)
 {
-	// make the walls
-	std::unordered_map<int, bool> discovered;
-	std::list<struct junction*> chain;
-	for (const auto &j : junctions) {
-		discovered[j.index] = false;
+	// find the center tile
+	std::unordered_map<int, bool> visited;
+	float min = glm::distance(area.min, area.max);
+	glm::vec2 center = 0.5f * area.max;
+
+	for (auto &d : districts) {
+		visited[d.index] = false;
+		d.radius = 0;
+		float dist = glm::distance(center, d.center);
+		if (dist < min) {
+			min = dist;
+			core = &d;
+		}
 	}
-	for (auto &sect : sections) {
-		if (sect.j0->wallcandidate == true && sect.j1->wallcandidate == true && discovered[sect.j0->index] == false && discovered[sect.j1->index] == false) {
-			discovered[sect.j0->index] = true;
-			discovered[sect.j1->index] = true;
-			std::list<struct junction*> queue;
-			chain.push_back(sect.j0);
-			chain.push_front(sect.j1);
-			queue.push_back(sect.j0);
-			while (!queue.empty()) {
-				struct junction *node = queue.front();
-				queue.pop_front();
-				for (auto neighbor : node->adjacent) {
-					if (discovered[neighbor->index] == false && neighbor->wallcandidate == true) {
-						discovered[neighbor->index] = true;
-						queue.push_back(neighbor);
-						chain.push_back(neighbor);
-					}
-				}
+
+	// distance to center tile in graph
+	std::queue<const struct district*> queue;
+	queue.push(core);
+	visited[core->index] = true;
+	while (!queue.empty()) {
+		const struct district *node = queue.front();
+		queue.pop();
+		int depth = node->radius + 1;
+		for (auto neighbor : node->neighbors) {
+			if (visited[neighbor->index] == false) {
+				visited[neighbor->index] = true;
+				neighbor->radius = depth;
+				queue.push(neighbor);
 			}
 		}
-	}
-
-	std::vector<struct meta> data;
-	for (std::list<struct junction*>::iterator it = chain.begin(); it != chain.end(); ++it) {
-		auto nx = std::next(it);
-		if (nx == chain.end()) {
-			nx = chain.begin();
-		}
-		auto nxnx = std::next(nx);
-		if (nxnx == chain.end()) {
-			nxnx = chain.begin();
-		}
-		const struct junction *a = *it;
-		const struct junction *b = *nx;
-		const struct junction *c = *nxnx;
-		float iso = triangle_isoscelenes(a->position, b->position, c->position);
-		// check if the triangle points "inside"
-		if (b->radius < 8) {
-			//if (iso < 0.5F) {
-				data.push_back((struct meta) {b, a, c, iso});
-			//}
-			it = chain.erase(nx);
-			it = std::prev(it);
-		}
-	}
-
-	// make town gates
-	// reset discovered
-	std::unordered_map<int, int> depth;
-	for (const auto &j : junctions) {
-		discovered[j.index] = false;
-		depth[j.index] = 0;
-	}
-	std::sort(data.begin(), data.end(), highest_area);
-	for (auto &d : data) {
-		if (discovered[d.j->index] == false) {
-			discovered[d.j->index] = true;
-			entrances.push_back(d.j);
-			struct towngate gate = make_gate(&d);
-			float area = triangle_area(gate.wall.P0, gate.wall.P1, gate.inward->position);
-			if (area > MIN_INWARD_AREA && gate.outward != nullptr) {
-				towngates.push_back(gate);
-				std::queue<const struct junction*> queue;
-				queue.push(d.j);
-				while (!queue.empty()) {
-					const struct junction *node = queue.front();
-					queue.pop();
-					int layer = depth[node->index] + 1;
-					if (layer > MIN_TOWNGATE_DISTANCE) {
-						break;
-					}
-					for (auto neighbor : node->adjacent) {
-						if (neighbor->wallcandidate == true && discovered[neighbor->index] == false) {
-							discovered[neighbor->index] = true;
-							depth[neighbor->index] = layer;
-							queue.push(neighbor);
-						}
-					}
-				}
-			}
-		}
-	}
-
-	for (std::list<struct junction*>::iterator it = chain.begin(); it != chain.end(); ++it) {
-		auto nx = std::next(it);
-		if (nx == chain.end()) {
-			nx = chain.begin();
-		}
-
-		const struct junction *j = *it;
-		const struct junction *nxj = *nx;
-
-		struct segment S = { j->position, nxj->position };
-		walls.push_back(S);
 	}
 }
 
-void Sitemap::make_highways(void)
+void Sitemap::find_junction_radius(void)
 {
 	std::unordered_map<int, bool> visited;
-	std::unordered_map<int, int> depth;
-	for (const auto &j : junctions) {
+	for (auto &j : junctions) {
 		visited[j.index] = false;
-		depth[j.index] = 0;
+		j.radius = 0;
 	}
-	for (const auto &root : towncenter->junctions) {
+	for (const auto &root : core->junctions) {
 		visited[root->index] = true;
 	}
 
 	// town center
-	for (const auto &root : towncenter->junctions) {
+	for (const auto &root : core->junctions) {
 		std::queue<const struct junction*> queue;
 		queue.push(root);
 		while (!queue.empty()) {
 			const struct junction *node = queue.front();
 			queue.pop();
-			int layer = depth[node->index] + 1;
+			int layer = node->radius + 1;
 			for (auto neighbor : node->adjacent) {
 				if (visited[neighbor->index] == false) {
 					visited[neighbor->index] = true;
-					depth[neighbor->index] = layer;
+					neighbor->radius = layer;
 					queue.push(neighbor);
-				} else if (depth[neighbor->index] > layer) {
-					depth[neighbor->index] = layer;
+				} else if (neighbor->radius > layer) {
+					neighbor->radius = layer;
 					queue.push(neighbor);
 				}
 			}
 		}
 	}
-	for (auto &gate : towngates) {
-		std::queue<const struct junction*> queue;
-		queue.push(gate.inward);
-		glm::vec2 dir = glm::normalize(gate.inward->position - gate.gatepoint);
-		while (!queue.empty()) {
-			const struct junction *node = queue.front();
-			queue.pop();
-			const struct junction *next = nullptr;
-			float maxdot = -1.f;
-			for (auto neighbor : node->adjacent) {
-				if (depth[neighbor->index] < depth[node->index]) {
-					glm::vec2 nextdir = glm::normalize(neighbor->position - node->position);
-					float dotp = glm::dot(nextdir, dir);
-					if (dotp > maxdot) {
-						maxdot = dotp;
-						next = neighbor;
-					}
-				}
-			}
-			if (next != nullptr) {
-				queue.push(next);
-				highways.push_back((struct segment) {node->position, next->position});
-			}
-		}
-	}
+}
 
-	// outside center
-	// reset
-	for (const auto &j : junctions) {
-		visited[j.index] = j.border;
-		depth[j.index] = 0;
-	}
-	for (const auto &root : junctions) {
-		if (root.border == true) {
-			std::queue<const struct junction*> queue;
-			queue.push(&root);
-			while (!queue.empty()) {
-				const struct junction *node = queue.front();
-				queue.pop();
-				int layer = depth[node->index] + 1;
-				for (auto neighbor : node->adjacent) {
-					if (visited[neighbor->index] == false) {
-						visited[neighbor->index] = true;
-						depth[neighbor->index] = layer;
-						queue.push(neighbor);
-					} else if (depth[neighbor->index] > layer) {
-						depth[neighbor->index] = layer;
-						queue.push(neighbor);
-					}
-				}
-			}
-		}
-	}
-	for (auto &gate : towngates) {
-		std::queue<const struct junction*> queue;
-		queue.push(gate.outward);
-		glm::vec2 dir = glm::normalize(gate.outward->position - gate.gatepoint);
-		while (!queue.empty()) {
-			const struct junction *node = queue.front();
-			queue.pop();
-			const struct junction *next = nullptr;
-			float maxdot = -1.f;
-			for (auto neighbor : node->adjacent) {
-				if (depth[neighbor->index] < depth[node->index] && neighbor->wallcandidate == false) {
-					glm::vec2 nextdir = glm::normalize(neighbor->position - node->position);
-					float dotp = glm::dot(nextdir, dir);
-					if (dotp > maxdot) {
-						maxdot = dotp;
-						next = neighbor;
-					}
-				}
-			}
-			if (next != nullptr) {
-				queue.push(next);
-				highways.push_back((struct segment) {node->position, next->position});
-			}
+void Sitemap::outline_walls(void)
+{
+	const size_t WALL_RADIUS = 2;
+
+	for (auto &sect : sections) {
+		if (sect.d0->radius == WALL_RADIUS && sect.d1->radius == WALL_RADIUS) {
+			sect.wall = true;
+			sect.d0->wall = true;
+			sect.d1->wall = true;
+		} else {
+			sect.wall = false;
 		}
 	}
 }

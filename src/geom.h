@@ -78,3 +78,5 @@ void frustum_to_planes(glm::mat4 M, glm::vec4 planes[6]);
 glm::vec2 segment_midpoint(glm::vec2 a, glm::vec2 b);
 
 bool clockwise(glm::vec2 a, glm::vec2 b, glm::vec2 c);
+
+float triangle_area(glm::vec2 a, glm::vec2 b, glm::vec2 c);

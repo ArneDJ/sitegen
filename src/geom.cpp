@@ -573,3 +573,9 @@ bool clockwise(glm::vec2 a, glm::vec2 b, glm::vec2 c)
 		return false;
 	}
 }
+
+float triangle_area(glm::vec2 a, glm::vec2 b, glm::vec2 c)
+{
+	float area = ((b.x - a.x)*(c.y - a.y) - (c.x - a.x)*(b.y - a.y))/2.0;
+	return (area > 0.0) ? area : -area;
+}
