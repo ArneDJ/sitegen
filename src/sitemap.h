@@ -13,6 +13,7 @@ struct section {
 	bool border;
 	bool wall;
 	float area;
+	bool gateway;
 };
 
 struct junction {
@@ -43,12 +44,15 @@ public:
 	std::vector<struct junction> junctions;
 	std::vector<struct section> sections;
 	struct district *core;
+	std::vector<struct segment> highways;
 public:
 	Sitemap(long seed, struct rectangle area);
 	void make_diagram(void);
 	void make_districts(void);
 	void find_junction_radius(void);
 	void outline_walls(void);
+	void make_gateways(void);
+	void make_highways(void);
 private:
 	long seed;
 	struct rectangle area;

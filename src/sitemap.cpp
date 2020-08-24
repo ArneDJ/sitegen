@@ -30,6 +30,10 @@ Sitemap::Sitemap(long seed, struct rectangle area)
 	find_junction_radius();
 
 	outline_walls();
+
+	make_gateways();
+
+	make_highways();
 }
 
 void Sitemap::make_diagram(void)
@@ -110,6 +114,7 @@ void Sitemap::make_diagram(void)
 		sections[index].border = false;
 		sections[index].wall = false;
 		sections[index].area = 0.f;
+		sections[index].gateway = false;
 		if (edge.c0 != nullptr) {
 			sections[index].d0 = &districts[edge.c0->index];
 		} else {
@@ -218,6 +223,7 @@ void Sitemap::outline_walls(void)
 		}
 	}
 
+	/* TODO calculated area should be the rectangle INSIDE the walls */
 	for (auto &sect : sections) {
 		sect.area = 0.f;
 		if (sect.wall) {
@@ -260,6 +266,133 @@ void Sitemap::outline_walls(void)
 				target->wall = false;
 				for (auto targetsect : target->sections) {
 					targetsect->wall = false;
+				}
+			}
+		}
+	}
+}
+
+static bool comp_area(const struct section *a, const struct section*b)
+{
+	return a->area > b->area;
+}
+
+void Sitemap::make_gateways(void)
+{
+	std::vector<struct section*> candidates;
+	for (auto &sect : sections) {
+		if (sect.wall) {
+			candidates.push_back(&sect);
+		}
+	}
+	// traverse per district
+	std::unordered_map<int, bool> reserved;
+	std::unordered_map<int, int> depth;
+	for (const auto &dist : districts) {
+		reserved[dist.index] = false;
+		depth[dist.index] = 0;
+	}
+	// sort by largest area
+	std::sort(candidates.begin(), candidates.end(), comp_area);
+	for (auto sect : candidates) {
+		if (reserved[sect->d0->index] == false && reserved[sect->d1->index] == false) {
+			sect->gateway = true;
+			std::queue<struct district*> queue;
+			queue.push(sect->d0);
+			queue.push(sect->d1);
+			while (!queue.empty()) {
+				struct district *node = queue.front();
+				queue.pop();
+				int layer = depth[node->index] + 1;
+				reserved[node->index] = true;
+				for (auto neighbor : node->neighbors) {
+					if (reserved[neighbor->index] == false && layer < 3) {
+						depth[neighbor->index] = layer;
+						queue.push(neighbor);
+					}
+				}
+			}
+		}
+	}
+}
+
+void Sitemap::make_highways(void)
+{
+	// highway from gateway to town core
+	for (auto &sect : sections) {
+		if (sect.gateway) {
+			highways.push_back((struct segment){sect.j0->position, sect.j1->position});
+			struct junction *start = sect.j0->radius < sect.j1->radius ? sect.j0 : sect.j1;
+			std::queue<struct junction*> queue;
+			queue.push(start);
+			while (!queue.empty()) {
+				struct junction *node = queue.front();
+				queue.pop();
+				for (auto neighbor : node->adjacent) {
+					if (neighbor->radius < node->radius) {
+						queue.push(neighbor);
+						highways.push_back((struct segment){node->position, neighbor->position});
+						break;
+					}
+				}
+			}
+		}
+	}
+
+	// outside town center
+	std::unordered_map<int, bool> visited;
+	std::unordered_map<int, int> depth;
+	for (const auto &j : junctions) {
+		visited[j.index] = j.border;
+		depth[j.index] = 0;
+	}
+
+	for (const auto &root : junctions) {
+		if (root.border == true) {
+			std::queue<const struct junction*> queue;
+			queue.push(&root);
+			while (!queue.empty()) {
+				const struct junction *node = queue.front();
+				queue.pop();
+				int layer = depth[node->index] + 1;
+				for (auto neighbor : node->adjacent) {
+					if (visited[neighbor->index] == false) {
+						visited[neighbor->index] = true;
+						depth[neighbor->index] = layer;
+						queue.push(neighbor);
+					} else if (depth[neighbor->index] > layer) {
+						depth[neighbor->index] = layer;
+						queue.push(neighbor);
+					}
+				}
+			}
+		}
+	}
+	for (auto &sect : sections) {
+		if (sect.gateway) {
+			struct junction *outward = sect.j0->radius > sect.j1->radius ? sect.j0 : sect.j1;
+			struct junction *inward = sect.j0->radius < sect.j1->radius ? sect.j0 : sect.j1;
+			std::queue<const struct junction*> queue;
+			queue.push(outward);
+			glm::vec2 dir = glm::normalize(outward->position - inward->position);
+			while (!queue.empty()) {
+				const struct junction *node = queue.front();
+				queue.pop();
+				const struct junction *next = nullptr;
+				float maxdot = -1.f;
+				for (auto neighbor : node->adjacent) {
+					if (depth[neighbor->index] < depth[node->index] && neighbor->wallcandidate == false) {
+						glm::vec2 nextdir = glm::normalize(neighbor->position - node->position);
+						float dotp = glm::dot(nextdir, dir);
+						if (dotp > maxdot) {
+							maxdot = dotp;
+							next = neighbor;
+						}
+					}
+				}
+				if (next != nullptr) {
+					queue.push(next);
+					highways.push_back((struct segment) {node->position, next->position});
 				}
 			}
 		}

@@ -19,6 +19,7 @@ const glm::vec2 CENTER = {512.F, 512.F};
 unsigned char PURPLE[3] = {255, 0, 255};
 unsigned char ORANGE[3] = {255, 150, 0};
 unsigned char GRAY[3] = {112, 112, 112};
+unsigned char LIGHTGRAY[3] = {150, 150, 150};
 unsigned char BLACK[3] = {0, 0, 0};
 unsigned char GRN[3] = {0, 255, 0};
 unsigned char YELLOW[3] = {255, 255, 0};
@@ -78,8 +79,8 @@ void print_site(const Sitemap *map)
 	unsigned char color[3] = {255, 255, 255};
 	for (const auto &d : map->districts) {
 		glm::vec2 a = {round(d.center.x), round(d.center.y)};
-		float gradient = 1.f - (d.radius / 8.f);
-		//float gradient = 0.75f;
+		//float gradient = 1.f - (d.radius / 8.f);
+		float gradient = 0.75f;
 		if (d.radius < 2) {
 			gradient = 1.f;
 		}
@@ -91,8 +92,61 @@ void print_site(const Sitemap *map)
 			glm::vec2 c = {round(s->j1->position.x), round(s->j1->position.y)};
 			draw_triangle(a, b, c, image.data, image.width, image.height, image.nchannels, color);
 		}
-		draw_filled_circle(a.x, a.y, 1, image.data, image.width, image.height, image.nchannels, BLACK);
+		//draw_filled_circle(a.x, a.y, 1, image.data, image.width, image.height, image.nchannels, BLACK);
 	}
+	/*
+	for (const auto &sect : map->sections) {
+		draw_thick_line(sect.j0->position.x, sect.j0->position.y, sect.j1->position.x, sect.j1->position.y, 1, image.data, image.width, image.height, image.nchannels, GRN);
+	}
+	*/
+
+	for (const auto &sect : map->sections) {
+		if (sect.j0->radius < 3 && sect.j1->radius < 3) {
+			if (sect.j0->border == false && sect.j1->border == false) {
+				draw_thick_line(sect.j0->position.x, sect.j0->position.y, sect.j1->position.x, sect.j1->position.y, 3, image.data, image.width, image.height, image.nchannels, ORANGE);
+			}
+		}
+	}
+
+	 for (const auto &d : map->districts) {
+		if (d.radius < 2) {
+			float max = 0.f;
+			const struct section *longest;
+			for (const auto &s : d.sections) {
+				if (s->j0-> radius < 7 || s->j1->radius < 7) {
+					glm::vec2 mid = segment_midpoint(s->j0->position, s->j1->position);
+					float dist = glm::distance(s->j0->position, s->j1->position);
+					if (dist > max) {
+						max = dist;
+						longest = s;
+					}
+				}
+			}
+			glm::vec2 mad = segment_midpoint(longest->j0->position, longest->j1->position);
+			glm::vec2 tjunction = glm::normalize(d.center - mad);
+			draw_thick_line(d.center.x, d.center.y, mad.x, mad.y, 3, image.data, image.width, image.height, image.nchannels, ORANGE);
+			const struct section *coolest;
+			float mindot = 1.f;
+			for (const auto &s : d.sections) {
+				if (s->j0-> radius < 8 || s->j1->radius < 8) {
+					glm::vec2 mid = segment_midpoint(s->j0->position, s->j1->position);
+					glm::vec2 cool = glm::normalize(d.center - mid);
+					float dot = glm::dot(tjunction, cool);
+					if (dot < mindot) {
+						mindot = dot;
+						coolest = s;
+					}
+				}
+			}
+			glm::vec2 mod = segment_midpoint(coolest->j0->position, coolest->j1->position);
+			draw_thick_line(d.center.x, d.center.y, mod.x, mod.y, 3, image.data, image.width, image.height, image.nchannels, ORANGE);
+		}
+	}
+
+	for (const auto &way : map->highways) {
+		draw_thick_line(way.P0.x, way.P0.y, way.P1.x, way.P1.y, 4, image.data, image.width, image.height, image.nchannels, ORANGE);
+	}
+
 
 	for (const auto &sect : map->sections) {
 		if (sect.wall) {
@@ -104,14 +158,12 @@ void print_site(const Sitemap *map)
 			draw_filled_circle(d.center.x, d.center.y, 12, image.data, image.width, image.height, image.nchannels, GRAY);
 		}
 	}
-	for (const auto &sect : map->sections) {
-		draw_thick_line(sect.j0->position.x, sect.j0->position.y, sect.j1->position.x, sect.j1->position.y, 1, image.data, image.width, image.height, image.nchannels, GRN);
-	}
+
 
 	draw_filled_circle(map->core->center.x, map->core->center.y, 4, image.data, image.width, image.height, image.nchannels, BLACK);
 
 	for (const auto &sect : map->sections) {
-		if (sect.wall && sect.area > 9000.f) {
+		if (sect.gateway) {
 			draw_thick_line(sect.d0->center.x, sect.d0->center.y, sect.d1->center.x, sect.d1->center.y, 6, image.data, image.width, image.height, image.nchannels, GRAY);
 			glm::vec2 outward = segment_midpoint(sect.d0->center, sect.d1->center);
 			glm::vec2 right = sect.d0->center - outward;
