@@ -464,23 +464,24 @@ void Sitemap::divide_polygons(std::list<glm::vec2> start)
 			std::list<glm::vec2>::iterator it = splitstart;
 			while (it != target) {
 				ying.push_back(*it);
+				it++;	
 				if (it == polygon.end()) { 
 					it = polygon.begin(); 
-				} else {
-					it++;	
 				}
 			}
+			ying.push_back(*target);
 			// second half
 			std::list<glm::vec2> yang;
 			it = splitstart;
 			while (it != target) {
 				yang.push_back(*it);
 				if (it == polygon.begin()) { 
-					it = polygon.end(); 
+					it = std::prev(polygon.end()); 
 				} else {
 					it--;	
 				}
 			}
+			yang.push_back(*target);
 		printf("original polygon\n");
 		for (auto &p : polygon) {
 			printf("%f, %f\n", p.x, p.y);
