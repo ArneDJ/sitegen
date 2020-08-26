@@ -4,6 +4,11 @@ struct district;
 struct junction;
 struct section;
 
+struct parcel {
+	glm::vec2 a, b, c, d;
+	glm::vec2 direction; // normalized direction vector to where the street is
+};
+
 struct section {
 	int index;
 	struct junction *j0 = nullptr;
@@ -45,6 +50,8 @@ public:
 	std::vector<struct section> sections;
 	struct district *core;
 	std::vector<struct segment> highways;
+	std::vector<struct parcel> parcels;
+	long seed;
 public:
 	Sitemap(long seed, struct rectangle area);
 	void make_diagram(void);
@@ -53,7 +60,8 @@ public:
 	void outline_walls(void);
 	void make_gateways(void);
 	void make_highways(void);
+	void divide_parcels(void);
+	void divide_polygons(std::list<glm::vec2> start);
 private:
-	long seed;
 	struct rectangle area;
 };

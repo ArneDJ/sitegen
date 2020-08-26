@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 #include <glm/mat4x4.hpp>
@@ -578,4 +579,30 @@ float triangle_area(glm::vec2 a, glm::vec2 b, glm::vec2 c)
 {
 	float area = ((b.x - a.x)*(c.y - a.y) - (c.x - a.x)*(b.y - a.y))/2.0;
 	return (area > 0.0) ? area : -area;
+}
+
+glm::vec2 closest_point_segment(glm::vec2 c, glm::vec2 a, glm::vec2 b)
+{
+	glm::vec2 ab = b - a;
+	// Project c onto ab, computing parameterized position d(t) = a + t*(b – a)
+	float t = glm::dot(c - a, ab) / glm::dot(ab, ab);
+	// If outside segment, clamp t (and therefore d) to the closest endpoint
+	if (t < 0.0f) { t = 0.0f; }
+	if (t > 1.0f) { t = 1.0f; }
+
+	// Compute projected position from the clamped t
+	return a + t * ab;
+}
+
+float sqrdist_point_segment(glm::vec2 c, glm::vec2 a, glm::vec2 b)
+{
+	glm::vec2 ab = b - a, ac = c - a, bc = c - b;
+	float e = glm::dot(ac, ab);
+	// Handle cases where c projects outside ab
+	if (e <= 0.0f) { return glm::dot(ac, ac); }
+	float f = glm::dot(ab, ab);
+	if (e >= f) { return glm::dot(bc, bc); }
+
+	// Handle cases where c projects onto ab
+	return glm::dot(ac, ac) - e * e / f;
 }

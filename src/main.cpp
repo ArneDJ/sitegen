@@ -28,32 +28,28 @@ void draw_filled_circle(int x0, int y0, int radius, unsigned char *image, int wi
 {
 	int x = radius;
 	int y = 0;
-	int xChange = 1 - (radius << 1);
-	int yChange = 0;
-	int radiusError = 0;
+	int xchange = 1 - (radius << 1);
+	int ychange = 0;
+	int err = 0;
 
-	while (x >= y)
-	{
-	for (int i = x0 - x; i <= x0 + x; i++)
-	{
-	plot(i, y0 + y, image, width, height, nchannels, color);
-	plot(i, y0 - y, image, width, height, nchannels, color);
-	}
-	for (int i = x0 - y; i <= x0 + y; i++)
-	{
-	plot(i, y0 + x, image, width, height, nchannels, color);
-	plot(i, y0 - x, image, width, height, nchannels, color);
-	}
+	while (x >= y) {
+		for (int i = x0 - x; i <= x0 + x; i++) {
+			plot(i, y0 + y, image, width, height, nchannels, color);
+			plot(i, y0 - y, image, width, height, nchannels, color);
+		}
+		for (int i = x0 - y; i <= x0 + y; i++) {
+			plot(i, y0 + x, image, width, height, nchannels, color);
+			plot(i, y0 - x, image, width, height, nchannels, color);
+		}
 
-	y++;
-	radiusError += yChange;
-	yChange += 2;
-	if (((radiusError << 1) + xChange) > 0)
-	{
-	x--;
-	radiusError += xChange;
-	xChange += 2;
-	}
+		y++;
+		err += ychange;
+		ychange += 2;
+		if (((err << 1) + xchange) > 0) {
+			x--;
+			err += xchange;
+			xchange += 2;
+		}
 	}
 }
 
@@ -76,9 +72,14 @@ void print_site(const Sitemap *map)
 {
 	struct byteimage image = blank_byteimage(3, 1024, 1024);
 
+	std::mt19937 gen(map->seed);
+	std::uniform_real_distribution<float> dist(0.f, 1.f);
+
 	unsigned char color[3] = {255, 255, 255};
 	for (const auto &d : map->districts) {
 		glm::vec2 a = {round(d.center.x), round(d.center.y)};
+		glm::vec3 greencolor = {0.78f, 1.f, 0.51f};
+		glm::vec3 yellowcolor = {0.91f, 1.f, 0.49f};
 		//float gradient = 1.f - (d.radius / 8.f);
 		float gradient = 0.75f;
 		if (d.radius < 2) {
@@ -87,6 +88,22 @@ void print_site(const Sitemap *map)
 		color[0] = 200 * gradient;
 		color[1] = 200 * gradient;
 		color[2] = 200 * gradient;
+		if (d.radius == 2) {
+			color[0] = 181;
+			color[1] = 204;
+			color[2] = 135;
+		}
+		if (d.radius > 2 && d.radius < 6) {
+			glm::vec3 rgb = glm::mix(yellowcolor, greencolor, dist(gen));
+			color[0] = 200*rgb.x;
+			color[1] = 200*rgb.y;
+			color[2] = 200*rgb.z;
+		}
+		if (d.radius > 5)  {
+			color[0] = 100;
+			color[1] = 200;
+			color[2] = 0;
+		}
 		for (const auto &s : d.sections) {
 			glm::vec2 b = {round(s->j0->position.x), round(s->j0->position.y)};
 			glm::vec2 c = {round(s->j1->position.x), round(s->j1->position.y)};
@@ -105,41 +122,6 @@ void print_site(const Sitemap *map)
 			if (sect.j0->border == false && sect.j1->border == false) {
 				draw_thick_line(sect.j0->position.x, sect.j0->position.y, sect.j1->position.x, sect.j1->position.y, 3, image.data, image.width, image.height, image.nchannels, ORANGE);
 			}
-		}
-	}
-
-	 for (const auto &d : map->districts) {
-		if (d.radius < 2) {
-			float max = 0.f;
-			const struct section *longest;
-			for (const auto &s : d.sections) {
-				if (s->j0-> radius < 7 || s->j1->radius < 7) {
-					glm::vec2 mid = segment_midpoint(s->j0->position, s->j1->position);
-					float dist = glm::distance(s->j0->position, s->j1->position);
-					if (dist > max) {
-						max = dist;
-						longest = s;
-					}
-				}
-			}
-			glm::vec2 mad = segment_midpoint(longest->j0->position, longest->j1->position);
-			glm::vec2 tjunction = glm::normalize(d.center - mad);
-			draw_thick_line(d.center.x, d.center.y, mad.x, mad.y, 3, image.data, image.width, image.height, image.nchannels, ORANGE);
-			const struct section *coolest;
-			float mindot = 1.f;
-			for (const auto &s : d.sections) {
-				if (s->j0-> radius < 8 || s->j1->radius < 8) {
-					glm::vec2 mid = segment_midpoint(s->j0->position, s->j1->position);
-					glm::vec2 cool = glm::normalize(d.center - mid);
-					float dot = glm::dot(tjunction, cool);
-					if (dot < mindot) {
-						mindot = dot;
-						coolest = s;
-					}
-				}
-			}
-			glm::vec2 mod = segment_midpoint(coolest->j0->position, coolest->j1->position);
-			draw_thick_line(d.center.x, d.center.y, mod.x, mod.y, 3, image.data, image.width, image.height, image.nchannels, ORANGE);
 		}
 	}
 
@@ -198,6 +180,12 @@ int main(int argc, char *argv[])
 	Sitemap sitemap = {seed, SITE_AREA};
 
 	print_site(&sitemap);
+
+	glm::vec2 c = {5.f, 1.f};
+	glm::vec2 a = {0.f, 0.f};
+	glm::vec2 b = {3.f, 0.f};
+glm::vec2 p = closest_point_segment(c, a, b);
+printf("%f, %f\n", p.x, p.y);
 
 	return 0;
 }

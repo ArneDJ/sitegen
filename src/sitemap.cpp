@@ -17,6 +17,7 @@ static const size_t VILLAGE_DISTRICT_RADIUS = 2;
 static const size_t TOWN_DISTRICT_RADIUS = 3;
 static const size_t FIELD_DISTRICT_RADIUS = 5;
 static const size_t WALL_RADIUS = 2;
+static const size_t MIN_GATEWAY_DISTANCE = 5;
 
 Sitemap::Sitemap(long seed, struct rectangle area)
 {
@@ -34,6 +35,8 @@ Sitemap::Sitemap(long seed, struct rectangle area)
 	make_gateways();
 
 	make_highways();
+
+	divide_parcels();
 }
 
 void Sitemap::make_diagram(void)
@@ -306,7 +309,7 @@ void Sitemap::make_gateways(void)
 				int layer = depth[node->index] + 1;
 				reserved[node->index] = true;
 				for (auto neighbor : node->neighbors) {
-					if (reserved[neighbor->index] == false && layer < 3) {
+					if (reserved[neighbor->index] == false && layer < MIN_GATEWAY_DISTANCE) {
 						depth[neighbor->index] = layer;
 						queue.push(neighbor);
 					}
@@ -395,6 +398,112 @@ void Sitemap::make_highways(void)
 					highways.push_back((struct segment) {node->position, next->position});
 				}
 			}
+		}
+	}
+}
+
+void Sitemap::divide_parcels(void)
+{
+	for (auto &d : districts) {
+		if (d.radius < WALL_RADIUS) {
+			std::list<glm::vec2> polygon;
+			for (auto jun : d.junctions) {
+				polygon.push_back(jun->position);
+			}
+			divide_polygons(polygon);
+		}
+	}
+}
+
+// a polygon can be stored as a double linked list of connected vertices
+void Sitemap::divide_polygons(std::list<glm::vec2> start)
+{
+	std::queue<std::list<glm::vec2>> polygons; // queue of polygons to split
+	polygons.push(start);
+
+	while (!polygons.empty()) {
+		std::list<glm::vec2> polygon = polygons.front();
+		polygons.pop();
+		if (polygon.size() > 4) {
+			struct segment longest = {{0.f, 0.f} , {0.f, 0.f}};
+			std::list<glm::vec2>::iterator longestv;
+			float max = 0.F;
+			// find the longest segment in the polygon
+			for (std::list<glm::vec2>::iterator it = polygon.begin(); it != polygon.end(); ++it) {
+				std::list<glm::vec2>::iterator next = std::next(it);
+				if (next == polygon.end()) {
+					next = polygon.begin();
+				}
+				glm::vec2 a = *it;
+				glm::vec2 b = *next;
+				float dist = glm::distance(a, b);
+				if (dist > max) {
+					max = dist;
+					longest.P0 = a;
+					longest.P1 = b;
+					longestv = next;
+				}
+			}
+			// find the point with the longest distance to the segment
+			std::list<glm::vec2>::iterator target;
+			max = 0.F;
+			for (std::list<glm::vec2>::iterator it = polygon.begin(); it != polygon.end(); ++it) {
+				glm::vec2 point = *it;
+				float dist = sqrdist_point_segment(point, longest.P0, longest.P1);
+				if (dist > max) {
+					max = dist;
+					target = it;
+				}
+			}
+			// now add the new vertex to the list
+			const glm::vec2 splitpoint = closest_point_segment(*target, longest.P0, longest.P1);
+			const std::list<glm::vec2>::iterator splitstart = polygon.insert(longestv, splitpoint);
+			// now split the polygon in two
+			// first half
+			std::list<glm::vec2> ying;
+			std::list<glm::vec2>::iterator it = splitstart;
+			while (it != target) {
+				ying.push_back(*it);
+				if (it == polygon.end()) { 
+					it = polygon.begin(); 
+				} else {
+					it++;	
+				}
+			}
+			// second half
+			std::list<glm::vec2> yang;
+			it = splitstart;
+			while (it != target) {
+				yang.push_back(*it);
+				if (it == polygon.begin()) { 
+					it = polygon.end(); 
+				} else {
+					it--;	
+				}
+			}
+		printf("original polygon\n");
+		for (auto &p : polygon) {
+			printf("%f, %f\n", p.x, p.y);
+		}
+		printf("first half\n");
+		for (auto &p : ying) {
+			printf("%f, %f\n", p.x, p.y);
+		}
+		printf("second half\n");
+		for (auto &p : yang) {
+			printf("%f, %f\n", p.x, p.y);
+		}
+		} else {
+			struct parcel par;
+			par.a = polygon.front();
+			polygon.pop_front();
+			par.b = polygon.front();
+			polygon.pop_front();
+			par.c = polygon.front();
+			polygon.pop_front();
+			par.d = polygon.front();
+			polygon.pop_front();
+			parcels.push_back(par);
 		}
 	}
 }

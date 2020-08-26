@@ -80,3 +80,7 @@ glm::vec2 segment_midpoint(glm::vec2 a, glm::vec2 b);
 bool clockwise(glm::vec2 a, glm::vec2 b, glm::vec2 c);
 
 float triangle_area(glm::vec2 a, glm::vec2 b, glm::vec2 c);
+
+glm::vec2 closest_point_segment(glm::vec2 c, glm::vec2 a, glm::vec2 b);
+
+float sqrdist_point_segment(glm::vec2 c, glm::vec2 a, glm::vec2 b);
