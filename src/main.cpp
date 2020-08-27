@@ -162,10 +162,10 @@ void print_site(const Sitemap *map)
 
 	printf("parcels %d\n", map->parcels.size());
 	for (const auto &parc : map->parcels) {
-		draw_thick_line(parc.a.x, parc.a.y, parc.b.x, parc.b.y, 1, image.data, image.width, image.height, image.nchannels, PURPLE);
-		draw_thick_line(parc.b.x, parc.b.y, parc.c.x, parc.c.y, 1, image.data, image.width, image.height, image.nchannels, PURPLE);
-		draw_thick_line(parc.c.x, parc.c.y, parc.d.x, parc.d.y, 1, image.data, image.width, image.height, image.nchannels, PURPLE);
-		draw_thick_line(parc.d.x, parc.d.y, parc.a.x, parc.a.y, 1, image.data, image.width, image.height, image.nchannels, PURPLE);
+		draw_line(parc.a.x, parc.a.y, parc.b.x, parc.b.y, image.data, image.width, image.height, image.nchannels, PURPLE);
+		draw_line(parc.b.x, parc.b.y, parc.c.x, parc.c.y, image.data, image.width, image.height, image.nchannels, PURPLE);
+		draw_line(parc.c.x, parc.c.y, parc.d.x, parc.d.y, image.data, image.width, image.height, image.nchannels, PURPLE);
+		draw_line(parc.d.x, parc.d.y, parc.a.x, parc.a.y, image.data, image.width, image.height, image.nchannels, PURPLE);
 	}
 
 	stbi_flip_vertically_on_write(true);
