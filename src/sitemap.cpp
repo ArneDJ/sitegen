@@ -19,6 +19,20 @@ static const size_t FIELD_DISTRICT_RADIUS = 5;
 static const size_t WALL_RADIUS = 2;
 static const size_t MIN_GATEWAY_DISTANCE = 5;
 
+float polygon_area(std::vector<glm::vec2> &vertices)
+{
+	float area = 0.f;
+
+	// Calculate value of shoelace formula
+	int j = vertices.size() - 1;
+	for (int i = 0; i < vertices.size(); i++) {
+		area += (vertices[j].x + vertices[i].x) * (vertices[j].y - vertices[i].y);
+		j = i;
+	}
+
+	return fabs(area / 2.f);
+}
+
 Sitemap::Sitemap(long seed, struct rectangle area)
 {
 	this->seed = seed;
@@ -405,7 +419,7 @@ void Sitemap::make_highways(void)
 void Sitemap::divide_parcels(void)
 {
 	for (auto &d : districts) {
-		if (d.radius < WALL_RADIUS) {
+		if (d.radius == 0) {
 			std::list<glm::vec2> polygon;
 			for (auto jun : d.junctions) {
 				polygon.push_back(jun->position);
@@ -415,6 +429,172 @@ void Sitemap::divide_parcels(void)
 	}
 }
 
+struct chainsplit {
+	std::list<glm::vec2>::iterator target;
+	std::list<glm::vec2>::iterator a;
+	std::list<glm::vec2>::iterator b;
+	glm::vec2 point;
+};
+			
+// ugly
+static struct chainsplit find_splitpoint(std::list<glm::vec2> &polygon)
+{
+	//std::list<glm::vec2>::iterator split;
+	struct chainsplit split;
+
+	float min = std::numeric_limits<float>::max();
+	for (std::list<glm::vec2>::iterator it = polygon.begin(); it != polygon.end(); ++it) {
+		std::list<glm::vec2>::iterator next = std::next(it);
+		if (next == polygon.end()) {
+			next = polygon.begin();
+		}
+		glm::vec2 a = *it;
+		glm::vec2 b = *next;
+		// find the point with the longest distance to the segment
+		std::list<glm::vec2>::iterator target;
+		float max = 0.F;
+		for (std::list<glm::vec2>::iterator it = polygon.begin(); it != polygon.end(); ++it) {
+			glm::vec2 point = *it;
+			float dist = sqrdist_point_segment(point, a, b);
+			if (dist > max) {
+				max = dist;
+				target = it;
+			}
+		}
+		// now add the new vertex to the list
+		const glm::vec2 splitpoint = closest_point_segment(*target, a, b);
+		const std::list<glm::vec2>::iterator splitstart = polygon.insert(next, splitpoint);
+		// now split the polygon in two
+		// first half
+		std::list<glm::vec2> right;
+		std::list<glm::vec2>::iterator chain = splitstart;
+		while (chain != target) {
+			right.push_back(*chain);
+			chain++;	
+			if (chain == polygon.end()) { 
+				chain = polygon.begin(); 
+			}
+		}
+		right.push_back(*target);
+		// second half
+		std::list<glm::vec2> left;
+		chain = splitstart;
+		while (chain != target) {
+			left.push_back(*chain);
+			if (chain == polygon.begin()) { 
+				chain = std::prev(polygon.end()); 
+			} else {
+				chain--;	
+			}
+		}
+		left.push_back(*target);
+
+		printf("right size %d\n", right.size());
+		printf("left size %d\n", left.size());
+
+		std::vector<glm::vec2> rightpoints;
+		std::vector<glm::vec2> leftpoints;
+		for (auto point : right) {
+			rightpoints.push_back(point);
+		}
+		for (auto point : left) {
+			leftpoints.push_back(point);
+		}
+		float arearight = polygon_area(rightpoints);
+		float arealeft = polygon_area(leftpoints);
+		float ratio = arearight / arealeft;
+
+		printf("area right %f\n", arearight);
+		printf("area left %f\n", arealeft);
+		printf("ratio %f\n", ratio);
+
+
+		// best ratio is the closest to 1
+		float dist = fabs(1.F - ratio);
+		if (dist < min) {
+			min = dist;
+			split.target = target;
+			split.a = it;
+			split.b = next;
+			split.point = splitpoint;
+		}
+
+		// remove the inserted point from the original polygon
+		polygon.erase(splitstart);
+	}
+		printf("min %f\n", min);
+
+	return split;
+}
+
+void Sitemap::divide_polygons(std::list<glm::vec2> start)
+{
+	std::queue<std::list<glm::vec2>> queue; // queue of polygons to split
+	queue.push(start);
+
+	while (!queue.empty()) {
+		std::list<glm::vec2> polygon = queue.front();
+		queue.pop();
+		if (polygon.size() == 4) {
+			struct parcel par;
+			par.a = polygon.front();
+			polygon.pop_front();
+			par.b = polygon.front();
+			polygon.pop_front();
+			par.c = polygon.front();
+			polygon.pop_front();
+			par.d = polygon.front();
+			polygon.pop_front();
+			parcels.push_back(par);
+		} else if (polygon.size() == 3) {
+			struct parcel par;
+			par.a = polygon.front();
+			polygon.pop_front();
+			par.b = polygon.front();
+			polygon.pop_front();
+			par.c = polygon.front();
+			par.d = polygon.front();
+			polygon.pop_front();
+			parcels.push_back(par);
+		}else {
+			// of all the polygon segments find a point that lies on a perpendicular line to the segment that divides the polygon in two "almost equal" areas 
+			printf("%d polygon before\n", polygon.size());
+			struct chainsplit split = find_splitpoint(polygon);
+			printf("%d polygon after\n", polygon.size());
+			// divide the polygon in two
+			const std::list<glm::vec2>::iterator splitstart = polygon.insert(split.b, split.point);
+			// first half
+			std::list<glm::vec2> right;
+			std::list<glm::vec2>::iterator it = splitstart;
+			while (it != split.target) {
+				right.push_back(*it);
+				it++;	
+				if (it == polygon.end()) { 
+					it = polygon.begin(); 
+				}
+			}
+			right.push_back(*split.target);
+			// second half
+			std::list<glm::vec2> left;
+			it = splitstart;
+			while (it != split.target) {
+				left.push_back(*it);
+				if (it == polygon.begin()) { 
+					it = std::prev(polygon.end()); 
+				} else {
+					it--;	
+				}
+			}
+			left.push_back(*split.target);
+
+			queue.push(right);
+			queue.push(left);
+			printf("right size %d\n", right.size());
+			printf("left size %d\n", left.size());
+		}
+	}
+}
+/*
 // a polygon can be stored as a double linked list of connected vertices
 void Sitemap::divide_polygons(std::list<glm::vec2> start)
 {
@@ -424,7 +604,13 @@ void Sitemap::divide_polygons(std::list<glm::vec2> start)
 	while (!polygons.empty()) {
 		std::list<glm::vec2> polygon = polygons.front();
 		polygons.pop();
-		if (polygon.size() > 4) {
+		std::vector<glm::vec2> vertices;
+		for (auto point : polygon) {
+			vertices.push_back(point);
+		}
+		float area = polygon_area(vertices);
+		printf("%f\n", area);
+		if (area > 500.f) {
 			struct segment longest = {{0.f, 0.f} , {0.f, 0.f}};
 			std::list<glm::vec2>::iterator longestv;
 			float max = 0.F;
@@ -460,51 +646,60 @@ void Sitemap::divide_polygons(std::list<glm::vec2> start)
 			const std::list<glm::vec2>::iterator splitstart = polygon.insert(longestv, splitpoint);
 			// now split the polygon in two
 			// first half
-			std::list<glm::vec2> ying;
+			std::list<glm::vec2> right;
 			std::list<glm::vec2>::iterator it = splitstart;
 			while (it != target) {
-				ying.push_back(*it);
+				right.push_back(*it);
 				it++;	
 				if (it == polygon.end()) { 
 					it = polygon.begin(); 
 				}
 			}
-			ying.push_back(*target);
+			right.push_back(*target);
 			// second half
-			std::list<glm::vec2> yang;
+			std::list<glm::vec2> left;
 			it = splitstart;
 			while (it != target) {
-				yang.push_back(*it);
+				left.push_back(*it);
 				if (it == polygon.begin()) { 
 					it = std::prev(polygon.end()); 
 				} else {
 					it--;	
 				}
 			}
-			yang.push_back(*target);
-		printf("original polygon\n");
-		for (auto &p : polygon) {
-			printf("%f, %f\n", p.x, p.y);
+			left.push_back(*target);
+			if (glm::distance(splitpoint, longest.P0) > 0.5f && glm::distance(splitpoint, longest.P1) > 0.5f) {
+				if (right.size() > 3) {
+					polygons.push(right);
+				}
+				if (left.size() > 3) {
+					polygons.push(left);
+				}
+			}
 		}
-		printf("first half\n");
-		for (auto &p : ying) {
-			printf("%f, %f\n", p.x, p.y);
-		}
-		printf("second half\n");
-		for (auto &p : yang) {
-			printf("%f, %f\n", p.x, p.y);
-		}
-		} else {
-			struct parcel par;
-			par.a = polygon.front();
-			polygon.pop_front();
-			par.b = polygon.front();
-			polygon.pop_front();
-			par.c = polygon.front();
-			polygon.pop_front();
-			par.d = polygon.front();
-			polygon.pop_front();
-			parcels.push_back(par);
-		}
+			printf("polygon size %d\n", polygon.size());
+			if (polygon.size() > 3) {
+				struct parcel par;
+				par.a = polygon.front();
+				polygon.pop_front();
+				par.b = polygon.front();
+				polygon.pop_front();
+				par.c = polygon.front();
+				polygon.pop_front();
+				par.d = polygon.front();
+				polygon.pop_front();
+				parcels.push_back(par);
+			} else if (polygon.size() == 3) {
+				struct parcel par;
+				par.a = polygon.front();
+				polygon.pop_front();
+				par.b = polygon.front();
+				polygon.pop_front();
+				par.c = polygon.front();
+				par.d = polygon.front();
+				polygon.pop_front();
+				parcels.push_back(par);
+			}
 	}
 }
+*/

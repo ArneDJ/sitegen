@@ -160,6 +160,14 @@ void print_site(const Sitemap *map)
 		}
 	}
 
+	printf("parcels %d\n", map->parcels.size());
+	for (const auto &parc : map->parcels) {
+		draw_thick_line(parc.a.x, parc.a.y, parc.b.x, parc.b.y, 1, image.data, image.width, image.height, image.nchannels, PURPLE);
+		draw_thick_line(parc.b.x, parc.b.y, parc.c.x, parc.c.y, 1, image.data, image.width, image.height, image.nchannels, PURPLE);
+		draw_thick_line(parc.c.x, parc.c.y, parc.d.x, parc.d.y, 1, image.data, image.width, image.height, image.nchannels, PURPLE);
+		draw_thick_line(parc.d.x, parc.d.y, parc.a.x, parc.a.y, 1, image.data, image.width, image.height, image.nchannels, PURPLE);
+	}
+
 	stbi_flip_vertically_on_write(true);
 	stbi_write_png("diagram.png", image.width, image.height, image.nchannels, image.data, image.width*image.nchannels);
 
@@ -180,12 +188,6 @@ int main(int argc, char *argv[])
 	Sitemap sitemap = {seed, SITE_AREA};
 
 	print_site(&sitemap);
-
-	glm::vec2 c = {5.f, 1.f};
-	glm::vec2 a = {0.f, 0.f};
-	glm::vec2 b = {3.f, 0.f};
-glm::vec2 p = closest_point_segment(c, a, b);
-printf("%f, %f\n", p.x, p.y);
 
 	return 0;
 }
