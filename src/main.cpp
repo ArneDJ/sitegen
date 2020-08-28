@@ -26,52 +26,6 @@ unsigned char YELLOW[3] = {255, 255, 0};
 unsigned char REDCOLOR[3] = {255, 0, 0};
 unsigned char BLU[3] = {0, 0, 255};
 
-float quadrilateral_area(glm::vec2 a, glm::vec2 b, glm::vec2 c, glm::vec2 d)
-{
-	return (a.x*b.y - b.x*a.y) + (b.x*c.y - c.x*b.y) + (c.x*d.y - d.x*c.y) + (c.x*a.y - a.x*c.y);
-}
-
-glm::vec2 polygon_centroid(std::vector<glm::vec2> &vertices)
-{
-	glm::vec2 centroid = {0.f, 0.f};
-	float signedArea = 0.0;
-	float x0 = 0.0; // Current vertex X
-	float y0 = 0.0; // Current vertex Y
-	float x1 = 0.0; // Next vertex X
-	float y1 = 0.0; // Next vertex Y
-	float a = 0.0;  // Partial signed area
-
-	// For all vertices except last
-	int i=0;
-	for (i=0; i<vertices.size()-1; ++i) {
-		x0 = vertices[i].x;
-		y0 = vertices[i].y;
-		x1 = vertices[i+1].x;
-		y1 = vertices[i+1].y;
-		a = x0*y1 - x1*y0;
-		signedArea += a;
-		centroid.x += (x0 + x1)*a;
-		centroid.y += (y0 + y1)*a;
-	}
-
-	// Do last vertex separately to avoid performing an expensive
-	// modulus operation in each iteration.
-	x0 = vertices[i].x;
-	y0 = vertices[i].y;
-	x1 = vertices[0].x;
-	y1 = vertices[0].y;
-	a = x0*y1 - x1*y0;
-	signedArea += a;
-	centroid.x += (x0 + x1)*a;
-	centroid.y += (y0 + y1)*a;
-
-	signedArea *= 0.5;
-	centroid.x /= (6.0*signedArea);
-	centroid.y /= (6.0*signedArea);
-
-	return centroid;
-}
-
 void draw_filled_circle(int x0, int y0, int radius, unsigned char *image, int width, int height, int nchannels, unsigned char *color)
 {
 	int x = radius;
@@ -136,7 +90,7 @@ void print_site(const Sitemap *map)
 		color[0] = 200 * gradient;
 		color[1] = 200 * gradient;
 		color[2] = 200 * gradient;
-		if (d.radius == 2) {
+		if (d.radius < 3) {
 			color[0] = 181;
 			color[1] = 204;
 			color[2] = 135;
@@ -195,6 +149,7 @@ void print_site(const Sitemap *map)
 
 	draw_filled_circle(map->core->center.x, map->core->center.y, 4, image.data, image.width, image.height, image.nchannels, BLACK);
 
+	/*
 	for (const auto &sect : map->sections) {
 		if (sect.gateway) {
 			draw_thick_line(sect.d0->center.x, sect.d0->center.y, sect.d1->center.x, sect.d1->center.y, 6, image.data, image.width, image.height, image.nchannels, GRAY);
@@ -210,8 +165,10 @@ void print_site(const Sitemap *map)
 			draw_thick_line(b.x, b.y, d.x, d.y, 1, image.data, image.width, image.height, image.nchannels, YELLOW);
 		}
 	}
+	*/
 
 	printf("parcels %d\n", map->parcels.size());
+	/*
 	for (const auto &parc : map->parcels) {
 		draw_line(parc.frontleft.x, parc.frontleft.y, parc.frontright.x, parc.frontright.y, image.data, image.width, image.height, image.nchannels, PURPLE);
 		draw_line(parc.frontright.x, parc.frontright.y, parc.backleft.x, parc.backleft.y, image.data, image.width, image.height, image.nchannels, PURPLE);
@@ -223,6 +180,7 @@ void print_site(const Sitemap *map)
 		draw_filled_circle(parc.backleft.x, parc.backleft.y, 1, image.data, image.width, image.height, image.nchannels, BLU);
 		draw_filled_circle(parc.backright.x, parc.backright.y, 1, image.data, image.width, image.height, image.nchannels, BLACK);
 	}
+	*/
 
 	// draw houses
 	//const float AREA_SMALL_HOUSE = 25.F;
@@ -234,24 +192,45 @@ void print_site(const Sitemap *map)
 	const float LARGE_HOUSE_HEIGHT = 40.F;
 	//const float AREA_LARGE_HOUSE = 200.F;
 	for (const auto &parc : map->parcels) {
-		//printf("distance %f\n", glm::distance(parc.a, parc.c));
-		std::vector<glm::vec2> vertices;
-		vertices.push_back(parc.frontleft);
-		vertices.push_back(parc.frontright);
-		vertices.push_back(parc.backleft);
-		vertices.push_back(parc.backright);
-		glm::vec2 centroid = polygon_centroid(vertices);
-		//glm::vec2 center = segment_midpoint(parc.frontleft, parc.backleft);
 		float parc_width_front = glm::distance(parc.frontleft, parc.frontright);
 		float parc_width_back = glm::distance(parc.backleft, parc.backright);
 		float parc_height_left = glm::distance(parc.frontleft, parc.backright);
 		float parc_height_right = glm::distance(parc.frontright, parc.backleft);
+		float theta = atan2(parc.direction.y, parc.direction.x);
+		glm::vec2 perpleft = {-parc.direction.y, parc.direction.x};
+		glm::vec2 perpright = {parc.direction.y, -parc.direction.x};
 		if ((parc_width_front > LARGE_HOUSE_WIDTH || parc_width_back > LARGE_HOUSE_WIDTH) && (parc_height_left > LARGE_HOUSE_HEIGHT || parc_height_right > LARGE_HOUSE_HEIGHT)) {
-			draw_filled_circle(centroid.x, centroid.y, 12, image.data, image.width, image.height, image.nchannels, PURPLE);
+			//draw_filled_circle(parc.centroid.x, parc.centroid.y, 12, image.data, image.width, image.height, image.nchannels, PURPLE);
+			glm::vec2 a = parc.centroid + (0.5f*LARGE_HOUSE_HEIGHT)*parc.direction + (0.5f*LARGE_HOUSE_WIDTH)*perpleft;
+			glm::vec2 b = parc.centroid + (0.5f*LARGE_HOUSE_HEIGHT)*parc.direction + (0.5f*LARGE_HOUSE_WIDTH)*perpright;
+			glm::vec2 c = parc.centroid + (0.5f*LARGE_HOUSE_HEIGHT)*(-parc.direction) + (0.5f*LARGE_HOUSE_WIDTH)*perpleft;
+			glm::vec2 d = parc.centroid + (0.5f*LARGE_HOUSE_HEIGHT)*(-parc.direction) + (0.5f*LARGE_HOUSE_WIDTH)*perpright;
+			draw_thick_line(a.x, a.y, b.x, b.y, 1, image.data, image.width, image.height, image.nchannels, GRAY);
+			draw_thick_line(a.x, a.y, c.x, c.y, 1, image.data, image.width, image.height, image.nchannels, GRAY);
+			draw_thick_line(b.x, b.y, d.x, d.y, 1, image.data, image.width, image.height, image.nchannels, GRAY);
+			draw_thick_line(c.x, c.y, d.x, d.y, 1, image.data, image.width, image.height, image.nchannels, GRAY);
+			draw_line(parc.centroid.x, parc.centroid.y, parc.centroid.x+0.5f*LARGE_HOUSE_HEIGHT*parc.direction.x, parc.centroid.y+0.5f*LARGE_HOUSE_HEIGHT*parc.direction.y, image.data, image.width, image.height, image.nchannels, REDCOLOR);
 		} else if (parc_width_front > MEDIUM_HOUSE_WIDTH && parc_width_back > MEDIUM_HOUSE_WIDTH && parc_height_left > MEDIUM_HOUSE_HEIGHT && parc_height_right > MEDIUM_HOUSE_HEIGHT) {
-			draw_filled_circle(centroid.x, centroid.y, 6, image.data, image.width, image.height, image.nchannels, PURPLE);
+			glm::vec2 a = parc.centroid + (0.5f*MEDIUM_HOUSE_HEIGHT)*parc.direction + (0.5f*MEDIUM_HOUSE_WIDTH)*perpleft;
+			glm::vec2 b = parc.centroid + (0.5f*MEDIUM_HOUSE_HEIGHT)*parc.direction + (0.5f*MEDIUM_HOUSE_WIDTH)*perpright;
+			glm::vec2 c = parc.centroid + (0.5f*MEDIUM_HOUSE_HEIGHT)*(-parc.direction) + (0.5f*MEDIUM_HOUSE_WIDTH)*perpleft;
+			glm::vec2 d = parc.centroid + (0.5f*MEDIUM_HOUSE_HEIGHT)*(-parc.direction) + (0.5f*MEDIUM_HOUSE_WIDTH)*perpright;
+			draw_thick_line(a.x, a.y, b.x, b.y, 1, image.data, image.width, image.height, image.nchannels, GRAY);
+			draw_thick_line(a.x, a.y, c.x, c.y, 1, image.data, image.width, image.height, image.nchannels, GRAY);
+			draw_thick_line(b.x, b.y, d.x, d.y, 1, image.data, image.width, image.height, image.nchannels, GRAY);
+			draw_thick_line(c.x, c.y, d.x, d.y, 1, image.data, image.width, image.height, image.nchannels, GRAY);
+			draw_line(parc.centroid.x, parc.centroid.y, parc.centroid.x+0.5f*MEDIUM_HOUSE_HEIGHT*parc.direction.x, parc.centroid.y+0.5f*MEDIUM_HOUSE_HEIGHT*parc.direction.y, image.data, image.width, image.height, image.nchannels, REDCOLOR);
 		} else if (parc_width_front > SMALL_HOUSE_WIDTH && parc_width_back > SMALL_HOUSE_WIDTH && parc_height_left > SMALL_HOUSE_HEIGHT && parc_height_right > SMALL_HOUSE_HEIGHT) {
-			draw_filled_circle(centroid.x, centroid.y, 3, image.data, image.width, image.height, image.nchannels, PURPLE);
+			//draw_filled_circle(parc.centroid.x, parc.centroid.y, 3, image.data, image.width, image.height, image.nchannels, PURPLE);
+			glm::vec2 a = parc.centroid + (0.5f*SMALL_HOUSE_HEIGHT)*parc.direction + (0.5f*SMALL_HOUSE_WIDTH)*perpleft;
+			glm::vec2 b = parc.centroid + (0.5f*SMALL_HOUSE_HEIGHT)*parc.direction + (0.5f*SMALL_HOUSE_WIDTH)*perpright;
+			glm::vec2 c = parc.centroid + (0.5f*SMALL_HOUSE_HEIGHT)*(-parc.direction) + (0.5f*SMALL_HOUSE_WIDTH)*perpleft;
+			glm::vec2 d = parc.centroid + (0.5f*SMALL_HOUSE_HEIGHT)*(-parc.direction) + (0.5f*SMALL_HOUSE_WIDTH)*perpright;
+			draw_thick_line(a.x, a.y, b.x, b.y, 1, image.data, image.width, image.height, image.nchannels, GRAY);
+			draw_thick_line(a.x, a.y, c.x, c.y, 1, image.data, image.width, image.height, image.nchannels, GRAY);
+			draw_thick_line(b.x, b.y, d.x, d.y, 1, image.data, image.width, image.height, image.nchannels, GRAY);
+			draw_thick_line(c.x, c.y, d.x, d.y, 1, image.data, image.width, image.height, image.nchannels, GRAY);
+			draw_line(parc.centroid.x, parc.centroid.y, parc.centroid.x+0.5f*SMALL_HOUSE_HEIGHT*parc.direction.x, parc.centroid.y+0.5f*SMALL_HOUSE_HEIGHT*parc.direction.y, image.data, image.width, image.height, image.nchannels, REDCOLOR);
 		}
 	}
 

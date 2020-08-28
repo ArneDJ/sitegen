@@ -12,6 +12,7 @@ struct parcel {
 	// back
 	glm::vec2 backleft;
 	glm::vec2 backright;
+	glm::vec2 centroid;
 	glm::vec2 direction; // normalized direction vector to where the street is
 	const struct district *owner;
 };

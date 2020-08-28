@@ -21,6 +21,47 @@ static const size_t FIELD_DISTRICT_RADIUS = 5;
 static const size_t WALL_RADIUS = 2;
 static const size_t MIN_GATEWAY_DISTANCE = 5;
 
+glm::vec2 polygon_centroid(std::vector<glm::vec2> &vertices)
+{
+	glm::vec2 centroid = {0.f, 0.f};
+	float area = 0.f;
+	float x0 = 0.f; // Current vertex X
+	float y0 = 0.f; // Current vertex Y
+	float x1 = 0.f; // Next vertex X
+	float y1 = 0.f; // Next vertex Y
+	float a = 0.f;  // Partial signed area
+
+	// For all vertices except last
+	int i = 0;
+	for (i = 0; i < vertices.size()-1; ++i) {
+		x0 = vertices[i].x;
+		y0 = vertices[i].y;
+		x1 = vertices[i+1].x;
+		y1 = vertices[i+1].y;
+		a = x0*y1 - x1*y0;
+		area += a;
+		centroid.x += (x0 + x1)*a;
+		centroid.y += (y0 + y1)*a;
+	}
+
+	// Do last vertex separately to avoid performing an expensive
+	// modulus operation in each iteration.
+	x0 = vertices[i].x;
+	y0 = vertices[i].y;
+	x1 = vertices[0].x;
+	y1 = vertices[0].y;
+	a = x0*y1 - x1*y0;
+	area += a;
+	centroid.x += (x0 + x1)*a;
+	centroid.y += (y0 + y1)*a;
+
+	area *= 0.5f;
+	centroid.x /= (6.f*area);
+	centroid.y /= (6.f*area);
+
+	return centroid;
+}
+
 static bool comp_area(const struct section *a, const struct section*b)
 {
 	return a->area > b->area;
@@ -438,7 +479,7 @@ void Sitemap::make_highways(void)
 void Sitemap::divide_parcels(void)
 {
 	for (auto &d : districts) {
-		if (d.radius == 1) {
+		if (d.radius > 0 && d.radius < TOWN_DISTRICT_RADIUS) {
 			std::list<glm::vec2> polygon;
 			for (auto jun : d.junctions) {
 				printf("%f, %f\n", jun->position.x, jun->position.y);
@@ -480,7 +521,7 @@ static struct chainsplit find_chainsplit(std::list<glm::vec2> &polygon)
 {
 	struct chainsplit split;
 
-	// find the longest segment of the polygon
+	// sort from longest to shortest segment
 	float maxdistance = std::numeric_limits<float>::min();
 	for (std::list<glm::vec2>::iterator it = polygon.begin(); it != polygon.end(); ++it) {
 		std::list<glm::vec2>::iterator next = std::next(it);
@@ -579,6 +620,14 @@ static struct parcel make_parcel(glm::vec2 a, glm::vec2 b, glm::vec2 c, glm::vec
 	par.backleft = b;
 	par.backright = a;
 	par.owner = cell;
+
+	std::vector<glm::vec2> vertices;
+	vertices.push_back(par.frontleft);
+	vertices.push_back(par.frontright);
+	vertices.push_back(par.backleft);
+	vertices.push_back(par.backright);
+	par.centroid = polygon_centroid(vertices);
+	par.direction = glm::normalize(segment_midpoint(par.frontleft, par.frontright) - par.centroid);
 	return par;
 }
 
