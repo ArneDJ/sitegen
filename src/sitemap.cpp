@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <unordered_map>
 #include <list>
+#include <functional>
+#include <math.h>
 #include <glm/glm.hpp>
 #include <glm/vec3.hpp>
 
@@ -18,6 +20,11 @@ static const size_t TOWN_DISTRICT_RADIUS = 3;
 static const size_t FIELD_DISTRICT_RADIUS = 5;
 static const size_t WALL_RADIUS = 2;
 static const size_t MIN_GATEWAY_DISTANCE = 5;
+
+static bool comp_area(const struct section *a, const struct section*b)
+{
+	return a->area > b->area;
+}
 
 float polygon_area(std::vector<glm::vec2> &vertices)
 {
@@ -36,6 +43,14 @@ float polygon_area(std::vector<glm::vec2> &vertices)
 	}
 
 	return fabs(area / 2.f);
+}
+
+static bool winding(struct junction *a, struct junction *b, glm::vec2 center)
+{
+	glm::vec2 av = glm::normalize(a->position - center);
+	glm::vec2 ab = glm::normalize(b->position - center);
+
+	return atan2(av.y, av.x) < atan2(ab.y, ab.x);
 }
 
 Sitemap::Sitemap(long seed, struct rectangle area)
@@ -162,7 +177,11 @@ void Sitemap::make_diagram(void)
 		for (const auto &s : d.sections) {
 			d.area += triangle_area(d.center, s->j0->position, s->j1->position);
 		}
+		// sort the polygon vertices in order
+		// ugly syntax
+		std::sort(d.junctions.begin(), d.junctions.end(), std::bind(winding, std::placeholders::_1, std::placeholders::_2, d.center));
 	}
+
 }
 
 void Sitemap::make_districts(void)
@@ -294,11 +313,6 @@ void Sitemap::outline_walls(void)
 	}
 }
 
-static bool comp_area(const struct section *a, const struct section*b)
-{
-	return a->area > b->area;
-}
-
 void Sitemap::make_gateways(void)
 {
 	std::vector<struct section*> candidates;
@@ -424,10 +438,12 @@ void Sitemap::make_highways(void)
 void Sitemap::divide_parcels(void)
 {
 	for (auto &d : districts) {
-		if (d.radius < 2) {
+		if (d.radius == 1) {
 			std::list<glm::vec2> polygon;
 			for (auto jun : d.junctions) {
-				polygon.push_back(jun->position);
+				printf("%f, %f\n", jun->position.x, jun->position.y);
+				glm::vec2 p = 0.9f * (jun->position - d.center);
+				polygon.push_back(d.center+p);
 			}
 			// set density
 			for (std::list<glm::vec2>::iterator it = polygon.begin(); it != polygon.end();) {
@@ -437,7 +453,7 @@ void Sitemap::divide_parcels(void)
 				}
 				glm::vec2 a = *it;
 				glm::vec2 b = *next;
-				printf("distance %f\n", glm::distance(a, b));
+				//printf("distance %f\n", glm::distance(a, b));
 				if (glm::distance(a, b) > 25.f) {
 					polygon.insert(next, segment_midpoint(a, b));
 				}
@@ -447,7 +463,7 @@ void Sitemap::divide_parcels(void)
 					it = polygon.end();
 				}
 			}
-			divide_polygons(polygon);
+			divide_polygons(polygon, &d);
 		}
 	}
 }
@@ -514,8 +530,8 @@ static struct chainsplit find_chainsplit(std::list<glm::vec2> &polygon)
 			}
 			left.push_back(*it);
 
-			printf("right size %d\n", right.size());
-			printf("left size %d\n", left.size());
+			//printf("right size %d\n", right.size());
+			//printf("left size %d\n", left.size());
 
 			std::vector<glm::vec2> rightpoints;
 			std::vector<glm::vec2> leftpoints;
@@ -528,6 +544,10 @@ static struct chainsplit find_chainsplit(std::list<glm::vec2> &polygon)
 			float arearight = polygon_area(rightpoints);
 			float arealeft = polygon_area(leftpoints);
 			float ratio = arearight / arealeft;
+
+			printf("area right %f\n", arearight);
+			printf("area left %f\n", arealeft);
+			printf("area ratio %f\n", ratio);
 
 			// best ratio is the closest to 1
 			float dist = fabs(1.F - ratio);
@@ -545,7 +565,24 @@ static struct chainsplit find_chainsplit(std::list<glm::vec2> &polygon)
 	return split;
 }
 
-void Sitemap::divide_polygons(std::list<glm::vec2> start)
+static struct parcel make_parcel(glm::vec2 a, glm::vec2 b, glm::vec2 c, glm::vec2 d, const struct district *cell)
+{
+	struct parcel par;
+
+	// find the front
+	//for (const auto sect : cell->sections) {
+	//}
+	// find the back
+	//
+	par.frontleft = d;
+	par.frontright = c;
+	par.backleft = b;
+	par.backright = a;
+	par.owner = cell;
+	return par;
+}
+
+void Sitemap::divide_polygons(std::list<glm::vec2> start, const struct district *cell)
 {
 	std::queue<std::list<glm::vec2>> queue; // queue of polygons to split
 	queue.push(start);
@@ -554,26 +591,19 @@ void Sitemap::divide_polygons(std::list<glm::vec2> start)
 		std::list<glm::vec2> polygon = queue.front();
 		queue.pop();
 		if (polygon.size() == 4) {
-			struct parcel par;
-			par.a = polygon.front();
+			glm::vec2 a = polygon.front();
 			polygon.pop_front();
-			par.b = polygon.front();
+			glm::vec2 b = polygon.front();
 			polygon.pop_front();
-			par.c = polygon.front();
+			glm::vec2 c= polygon.front();
 			polygon.pop_front();
-			par.d = polygon.front();
+			glm::vec2 d = polygon.front();
 			polygon.pop_front();
+			struct parcel par = make_parcel(a, b, c, d, cell);
 			parcels.push_back(par);
 		} else if (polygon.size() == 3) {
-			struct parcel par;
-			par.a = polygon.front();
-			polygon.pop_front();
-			par.b = polygon.front();
-			polygon.pop_front();
-			par.c = polygon.front();
-			par.d = polygon.front();
-			polygon.pop_front();
-			parcels.push_back(par);
+			//struct parcel par;
+			//parcels.push_back(par);
 		} else {
 			// of all the polygon segments find a point that lies on a perpendicular line to the segment that divides the polygon in two "almost equal" areas 
 			printf("\n");
@@ -606,8 +636,24 @@ void Sitemap::divide_polygons(std::list<glm::vec2> start)
 			}
 			left.push_back(*split.target);
 
-			queue.push(right);
-			queue.push(left);
+			std::vector<glm::vec2> rightpoints;
+			std::vector<glm::vec2> leftpoints;
+			for (auto point : right) {
+				rightpoints.push_back(point);
+			}
+			for (auto point : left) {
+				leftpoints.push_back(point);
+			}
+			float arearight = polygon_area(rightpoints);
+			float arealeft = polygon_area(leftpoints);
+
+			printf("area right %f\n", arearight);
+			printf("area left %f\n", arealeft);
+
+			if (arearight > 0.001f && arealeft > 0.001f) {
+				queue.push(right);
+				queue.push(left);
+			}
 			printf("right size %d\n", right.size());
 			printf("left size %d\n", left.size());
 		}

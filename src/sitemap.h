@@ -5,8 +5,15 @@ struct junction;
 struct section;
 
 struct parcel {
-	glm::vec2 a, b, c, d;
+	//glm::vec2 a, b, c, d;
+	// front faces the nearest street
+	glm::vec2 frontleft;
+	glm::vec2 frontright;
+	// back
+	glm::vec2 backleft;
+	glm::vec2 backright;
 	glm::vec2 direction; // normalized direction vector to where the street is
+	const struct district *owner;
 };
 
 struct section {
@@ -61,7 +68,7 @@ public:
 	void make_gateways(void);
 	void make_highways(void);
 	void divide_parcels(void);
-	void divide_polygons(std::list<glm::vec2> start);
+	void divide_polygons(std::list<glm::vec2> start, const struct district *cell);
 private:
 	struct rectangle area;
 };
