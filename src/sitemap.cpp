@@ -179,6 +179,7 @@ void Sitemap::make_diagram(void)
 			.adjacent = adjacent,
 			.districts = touches,
 			.border = false,
+			.street = false
 		};
 
 		junctions[vertex.index] = c;
@@ -222,7 +223,6 @@ void Sitemap::make_diagram(void)
 		// ugly syntax
 		std::sort(d.junctions.begin(), d.junctions.end(), std::bind(winding, std::placeholders::_1, std::placeholders::_2, d.center));
 	}
-
 }
 
 void Sitemap::make_districts(void)
@@ -449,13 +449,13 @@ void Sitemap::make_highways(void)
 		if (sect.gateway) {
 			struct junction *outward = sect.j0->radius > sect.j1->radius ? sect.j0 : sect.j1;
 			struct junction *inward = sect.j0->radius < sect.j1->radius ? sect.j0 : sect.j1;
-			std::queue<const struct junction*> queue;
+			std::queue<struct junction*> queue;
 			queue.push(outward);
 			glm::vec2 dir = glm::normalize(outward->position - inward->position);
 			while (!queue.empty()) {
-				const struct junction *node = queue.front();
+				struct junction *node = queue.front();
 				queue.pop();
-				const struct junction *next = nullptr;
+				struct junction *next = nullptr;
 				float maxdot = -1.f;
 				for (auto neighbor : node->adjacent) {
 					if (depth[neighbor->index] < depth[node->index] && neighbor->wallcandidate == false) {
@@ -470,6 +470,8 @@ void Sitemap::make_highways(void)
 				if (next != nullptr) {
 					queue.push(next);
 					highways.push_back((struct segment) {node->position, next->position});
+					node->street = true;
+					next->street = true;
 				}
 			}
 		}

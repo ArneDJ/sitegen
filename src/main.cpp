@@ -6,6 +6,7 @@
 #include <glm/glm.hpp>
 #include <glm/vec3.hpp>
 
+#include "extern/poisson_disk_sampling.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "extern/stb_image_write.h"
 
@@ -25,6 +26,7 @@ unsigned char GRN[3] = {0, 255, 0};
 unsigned char YELLOW[3] = {255, 255, 0};
 unsigned char REDCOLOR[3] = {255, 0, 0};
 unsigned char BLU[3] = {0, 0, 255};
+unsigned char DARKGREEN[3] = {0, 100, 0};
 
 void draw_filled_circle(int x0, int y0, int radius, unsigned char *image, int width, int height, int nchannels, unsigned char *color)
 {
@@ -68,6 +70,45 @@ void draw_thick_line(int x0, int y0, int x1, int y1, int radius, unsigned char *
 		if (e2 >= dy) { err += dy; x0 += sx; } // e_xy+e_x > 0
 		if (e2 <= dx) { err += dx; y0 += sy; } // e_xy+e_y < 0
 	}
+}
+
+void plant_trees(std::vector<glm::vec2> &tree_points, const Sitemap *map)
+{
+	float radius = 8.F;
+	auto mmin = std::array<float, 2>{{SITE_AREA.min.x, SITE_AREA.min.y}};
+	auto mmax = std::array<float, 2>{{SITE_AREA.max.x, SITE_AREA.max.y}};
+
+	std::vector<std::array<float, 2>> candidates = thinks::PoissonDiskSampling(radius, mmin, mmax, 30, map->seed);
+	std::vector<glm::vec2> locations;
+	for (const auto &point : candidates) {
+		locations.push_back(glm::vec2(point[0], point[1]));
+	}
+
+	struct byteimage image = blank_byteimage(1, 1024, 1024);
+	unsigned char color[] = {255};
+	for (const auto &d : map->districts) {
+		if (d.radius > 5) {
+			glm::vec2 a = {round(d.center.x), round(d.center.y)};
+			for (const auto &s : d.sections) {
+				glm::vec2 b = {round(s->j0->position.x), round(s->j0->position.y)};
+				glm::vec2 c = {round(s->j1->position.x), round(s->j1->position.y)};
+				// if street
+				if (s->j0->street && s->j1->street) {
+					b = a + (0.9F * (b-a));
+					c = a + (0.9F * (c-a));
+				}
+				draw_triangle(a, b, c, image.data, image.width, image.height, image.nchannels, color);
+			}
+		}
+	}
+
+	for (const auto point : locations) {
+		if (sample_byteimage(point.x, point.y, RED, &image) > 0.5F) {
+			tree_points.push_back(point);
+		}
+	}
+
+	delete_byteimage(&image);
 }
 
 void print_site(const Sitemap *map) 
@@ -210,6 +251,7 @@ void print_site(const Sitemap *map)
 			draw_thick_line(b.x, b.y, d.x, d.y, 1, image.data, image.width, image.height, image.nchannels, GRAY);
 			draw_thick_line(c.x, c.y, d.x, d.y, 1, image.data, image.width, image.height, image.nchannels, GRAY);
 			draw_line(parc.centroid.x, parc.centroid.y, parc.centroid.x+0.5f*LARGE_HOUSE_HEIGHT*parc.direction.x, parc.centroid.y+0.5f*LARGE_HOUSE_HEIGHT*parc.direction.y, image.data, image.width, image.height, image.nchannels, REDCOLOR);
+			//draw_triangle(parc.centroid, a, b, image.data, image.width, image.height, image.nchannels, REDCOLOR);
 		} else if (parc_width_front > MEDIUM_HOUSE_WIDTH && parc_width_back > MEDIUM_HOUSE_WIDTH && parc_height_left > MEDIUM_HOUSE_HEIGHT && parc_height_right > MEDIUM_HOUSE_HEIGHT) {
 			glm::vec2 a = parc.centroid + (0.5f*MEDIUM_HOUSE_HEIGHT)*parc.direction + (0.5f*MEDIUM_HOUSE_WIDTH)*perpleft;
 			glm::vec2 b = parc.centroid + (0.5f*MEDIUM_HOUSE_HEIGHT)*parc.direction + (0.5f*MEDIUM_HOUSE_WIDTH)*perpright;
@@ -232,6 +274,55 @@ void print_site(const Sitemap *map)
 			draw_thick_line(c.x, c.y, d.x, d.y, 1, image.data, image.width, image.height, image.nchannels, GRAY);
 			draw_line(parc.centroid.x, parc.centroid.y, parc.centroid.x+0.5f*SMALL_HOUSE_HEIGHT*parc.direction.x, parc.centroid.y+0.5f*SMALL_HOUSE_HEIGHT*parc.direction.y, image.data, image.width, image.height, image.nchannels, REDCOLOR);
 		}
+	}
+
+	// print farms
+	std::bernoulli_distribution bern(0.25f);
+	std::bernoulli_distribution tree(0.5f);
+	for (const auto &district : map->districts) {
+		if (district.radius > 2 && district.radius < 6) {
+			if (bern(gen) == true) {
+				float max = 0.f;
+				struct section *longest = nullptr;
+				for (const auto &sect : district.sections) {
+					float dist = glm::distance(sect->j0->position, sect->j1->position);
+					// also plant trees
+					if (tree(gen) == true && dist > 24.F) {
+						glm::vec2 start = district.center + 0.9f * (sect->j0->position - district.center);
+						glm::vec2 end = district.center + 0.9f * (sect->j1->position - district.center);
+						glm::vec2 mid = segment_midpoint(start, end);
+						draw_filled_circle(start.x, start.y, 2, image.data, image.width, image.height, image.nchannels, DARKGREEN);
+						draw_filled_circle(mid.x, mid.y, 2, image.data, image.width, image.height, image.nchannels, DARKGREEN);
+						draw_filled_circle(end.x, end.y, 2, image.data, image.width, image.height, image.nchannels, DARKGREEN);
+					}
+					if (dist > max) {
+						max = dist;
+						longest = sect;
+					}
+				}
+				if (longest != nullptr) {
+					glm::vec2 dir = glm::normalize(segment_midpoint(longest->j0->position, longest->j1->position) - district.center);
+					glm::vec2 perpleft = {-dir.y, dir.x};
+					glm::vec2 perpright = {dir.y, -dir.x};
+
+					glm::vec2 a = district.center + (0.5f*MEDIUM_HOUSE_HEIGHT)*dir + (0.5f*MEDIUM_HOUSE_WIDTH)*perpleft;
+					glm::vec2 b = district.center + (0.5f*MEDIUM_HOUSE_HEIGHT)*dir + (0.5f*MEDIUM_HOUSE_WIDTH)*perpright;
+					glm::vec2 c = district.center + (0.5f*MEDIUM_HOUSE_HEIGHT)*(-dir) + (0.5f*MEDIUM_HOUSE_WIDTH)*perpleft;
+					glm::vec2 d = district.center + (0.5f*MEDIUM_HOUSE_HEIGHT)*(-dir) + (0.5f*MEDIUM_HOUSE_WIDTH)*perpright;
+					draw_thick_line(a.x, a.y, b.x, b.y, 1, image.data, image.width, image.height, image.nchannels, GRAY);
+					draw_thick_line(a.x, a.y, c.x, c.y, 1, image.data, image.width, image.height, image.nchannels, GRAY);
+					draw_thick_line(b.x, b.y, d.x, d.y, 1, image.data, image.width, image.height, image.nchannels, GRAY);
+					draw_thick_line(c.x, c.y, d.x, d.y, 1, image.data, image.width, image.height, image.nchannels, GRAY);
+				}
+			}
+		}
+	}
+
+	// print forests
+	std::vector<glm::vec2> tree_points;
+	plant_trees(tree_points, map);
+	for (const auto &point : tree_points) {
+		draw_filled_circle(point.x, point.y, 2, image.data, image.width, image.height, image.nchannels, DARKGREEN);
 	}
 
 	stbi_flip_vertically_on_write(true);

@@ -37,6 +37,7 @@ struct junction {
 	bool border;
 	int radius;
 	bool wallcandidate;
+	bool street;
 };
 
 struct district {
