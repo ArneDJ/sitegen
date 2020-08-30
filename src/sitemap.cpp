@@ -14,12 +14,26 @@
 #include "voronoi.h"
 #include "sitemap.h"
 
+struct chainsegment {
+	std::list<glm::vec2>::iterator left;
+	std::list<glm::vec2>::iterator right;
+	float distance;
+};
+
+struct chainsplit {
+	std::list<glm::vec2>::iterator target;
+	std::list<glm::vec2>::iterator a;
+	std::list<glm::vec2>::iterator b;
+	glm::vec2 point;
+	float arealeft;
+	float arearight;
+};
+
 static const size_t MAX_CELLS = 128;
-static const size_t VILLAGE_DISTRICT_RADIUS = 2;
 static const size_t TOWN_DISTRICT_RADIUS = 3;
-static const size_t FIELD_DISTRICT_RADIUS = 5;
 static const size_t WALL_RADIUS = 2;
 static const size_t MIN_GATEWAY_DISTANCE = 5;
+static const float PARCEL_DENSITY_DISTANCE = 25.F;
 
 glm::vec2 polygon_centroid(std::vector<glm::vec2> &vertices)
 {
@@ -484,7 +498,6 @@ void Sitemap::divide_parcels(void)
 		if (d.radius > 0 && d.radius < TOWN_DISTRICT_RADIUS) {
 			std::list<glm::vec2> polygon;
 			for (auto jun : d.junctions) {
-				printf("%f, %f\n", jun->position.x, jun->position.y);
 				glm::vec2 p = 0.9f * (jun->position - d.center);
 				polygon.push_back(d.center+p);
 			}
@@ -496,8 +509,7 @@ void Sitemap::divide_parcels(void)
 				}
 				glm::vec2 a = *it;
 				glm::vec2 b = *next;
-				//printf("distance %f\n", glm::distance(a, b));
-				if (glm::distance(a, b) > 25.f) {
+				if (glm::distance(a, b) > PARCEL_DENSITY_DISTANCE) {
 					polygon.insert(next, segment_midpoint(a, b));
 				}
 				if (next != polygon.begin()) {
@@ -511,34 +523,13 @@ void Sitemap::divide_parcels(void)
 	}
 }
 
-struct chainsplit {
-	std::list<glm::vec2>::iterator target;
-	std::list<glm::vec2>::iterator a;
-	std::list<glm::vec2>::iterator b;
-	glm::vec2 point;
-};
-			
 // ugly
-static struct chainsplit find_chainsplit(std::list<glm::vec2> &polygon)
+static struct chainsplit find_chainsplit(std::list<glm::vec2> &polygon, std::list<glm::vec2>::iterator &longesta, std::list<glm::vec2>::iterator &longestb)
 {
 	struct chainsplit split;
 
-	// sort from longest to shortest segment
-	float maxdistance = std::numeric_limits<float>::min();
-	for (std::list<glm::vec2>::iterator it = polygon.begin(); it != polygon.end(); ++it) {
-		std::list<glm::vec2>::iterator next = std::next(it);
-		if (next == polygon.end()) {
-			next = polygon.begin();
-		}
-		glm::vec2 a = *it;
-		glm::vec2 b = *next;
-		float dist = glm::distance(a, b);
-		if (dist > maxdistance) {
-			maxdistance = dist;
-			split.a = it;
-			split.b = next;
-		}
-	}
+	split.a = longesta;
+	split.b = longestb;
 
 	// find the best possible way to split the polygon in two roughly equal areas
 	float min = std::numeric_limits<float>::max();
@@ -573,9 +564,6 @@ static struct chainsplit find_chainsplit(std::list<glm::vec2> &polygon)
 			}
 			left.push_back(*it);
 
-			//printf("right size %d\n", right.size());
-			//printf("left size %d\n", left.size());
-
 			std::vector<glm::vec2> rightpoints;
 			std::vector<glm::vec2> leftpoints;
 			for (auto point : right) {
@@ -584,13 +572,16 @@ static struct chainsplit find_chainsplit(std::list<glm::vec2> &polygon)
 			for (auto point : left) {
 				leftpoints.push_back(point);
 			}
-			float arearight = polygon_area(rightpoints);
-			float arealeft = polygon_area(leftpoints);
-			float ratio = arearight / arealeft;
+			split.arearight = polygon_area(rightpoints);
+			if (split.arearight == 0.F) {
+				split.arearight =  std::numeric_limits<float>::epsilon();
+			}
+			split.arealeft = polygon_area(leftpoints);
+			if (split.arealeft == 0.F) {
+				split.arealeft =  std::numeric_limits<float>::epsilon();
+			}
 
-			printf("area right %f\n", arearight);
-			printf("area left %f\n", arealeft);
-			printf("area ratio %f\n", ratio);
+			float ratio = split.arearight / split.arealeft;
 
 			// best ratio is the closest to 1
 			float dist = fabs(1.F - ratio);
@@ -621,7 +612,7 @@ static struct parcel make_parcel(glm::vec2 a, glm::vec2 b, glm::vec2 c, glm::vec
 	par.frontright = c;
 	par.backleft = b;
 	par.backright = a;
-	par.owner = cell;
+	par.quarter = cell;
 
 	std::vector<glm::vec2> vertices;
 	vertices.push_back(par.frontleft);
@@ -631,6 +622,11 @@ static struct parcel make_parcel(glm::vec2 a, glm::vec2 b, glm::vec2 c, glm::vec
 	par.centroid = polygon_centroid(vertices);
 	par.direction = glm::normalize(segment_midpoint(par.frontleft, par.frontright) - par.centroid);
 	return par;
+}
+
+static bool longest_segment(struct chainsegment &a, struct chainsegment &b)
+{
+	return a.distance > b.distance;
 }
 
 void Sitemap::divide_polygons(std::list<glm::vec2> start, const struct district *cell)
@@ -652,61 +648,67 @@ void Sitemap::divide_polygons(std::list<glm::vec2> start, const struct district 
 			polygon.pop_front();
 			struct parcel par = make_parcel(a, b, c, d, cell);
 			parcels.push_back(par);
-		} else if (polygon.size() == 3) {
-			//struct parcel par;
-			//parcels.push_back(par);
-		} else {
+		} else if (polygon.size() > 4) {
 			// of all the polygon segments find a point that lies on a perpendicular line to the segment that divides the polygon in two "almost equal" areas 
-			printf("\n");
-			printf("%d polygon before\n", polygon.size());
-			struct chainsplit split = find_chainsplit(polygon);
-			printf("%d polygon after\n", polygon.size());
-			// divide the polygon in two
-			const std::list<glm::vec2>::iterator splitstart = polygon.insert(split.b, split.point);
-			// first half
-			std::list<glm::vec2> right;
-			std::list<glm::vec2>::iterator it = splitstart;
-			while (it != split.target) {
-				right.push_back(*it);
-				it++;	
-				if (it == polygon.end()) { 
-					it = polygon.begin(); 
+			// sort from longest to shortest segment
+			std::vector<struct chainsegment> chainseg;
+			for (std::list<glm::vec2>::iterator it = polygon.begin(); it != polygon.end(); ++it) {
+				std::list<glm::vec2>::iterator next = std::next(it);
+				if (next == polygon.end()) {
+					next = polygon.begin();
 				}
+				chainseg.push_back((struct chainsegment){it, next, glm::distance(*it, *next)});
 			}
-			right.push_back(*split.target);
-			// second half
-			std::list<glm::vec2> left;
-			it = splitstart;
-			while (it != split.target) {
-				left.push_back(*it);
-				if (it == polygon.begin()) { 
-					it = std::prev(polygon.end()); 
-				} else {
-					it--;	
+			std::sort(chainseg.begin(), chainseg.end(), longest_segment);
+			for (auto &splitter : chainseg) {
+				struct chainsplit split = find_chainsplit(polygon, splitter.left, splitter.right);
+				// divide the polygon in two
+				const std::list<glm::vec2>::iterator splitstart = polygon.insert(split.b, split.point);
+				// first half
+				std::list<glm::vec2> right;
+				std::list<glm::vec2>::iterator it = splitstart;
+				while (it != split.target) {
+					right.push_back(*it);
+					it++;	
+					if (it == polygon.end()) { 
+						it = polygon.begin(); 
+					}
 				}
-			}
-			left.push_back(*split.target);
+				right.push_back(*split.target);
+				// second half
+				std::list<glm::vec2> left;
+				it = splitstart;
+				while (it != split.target) {
+					left.push_back(*it);
+					if (it == polygon.begin()) { 
+						it = std::prev(polygon.end()); 
+					} else {
+						it--;	
+					}
+				}
+				left.push_back(*split.target);
 
-			std::vector<glm::vec2> rightpoints;
-			std::vector<glm::vec2> leftpoints;
-			for (auto point : right) {
-				rightpoints.push_back(point);
-			}
-			for (auto point : left) {
-				leftpoints.push_back(point);
-			}
-			float arearight = polygon_area(rightpoints);
-			float arealeft = polygon_area(leftpoints);
+				std::vector<glm::vec2> rightpoints;
+				std::vector<glm::vec2> leftpoints;
+				for (auto point : right) {
+					rightpoints.push_back(point);
+				}
+				for (auto point : left) {
+					leftpoints.push_back(point);
+				}
+				float arearight = polygon_area(rightpoints);
+				float arealeft = polygon_area(leftpoints);
 
-			printf("area right %f\n", arearight);
-			printf("area left %f\n", arealeft);
-
-			if (arearight > 0.001f && arealeft > 0.001f) {
-				queue.push(right);
-				queue.push(left);
+				// best polygon split was found
+				// add the two halves of the polygon to the queue
+				if (arearight > 0.001f && arealeft > 0.001f) {
+					queue.push(right);
+					queue.push(left);
+					break;
+				}
+				// remove the inserted point from the original polygon
+				polygon.erase(splitstart);
 			}
-			printf("right size %d\n", right.size());
-			printf("left size %d\n", left.size());
 		}
 	}
 }

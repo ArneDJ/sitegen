@@ -5,7 +5,6 @@ struct junction;
 struct section;
 
 struct parcel {
-	//glm::vec2 a, b, c, d;
 	// front faces the nearest street
 	glm::vec2 frontleft;
 	glm::vec2 frontright;
@@ -13,8 +12,8 @@ struct parcel {
 	glm::vec2 backleft;
 	glm::vec2 backright;
 	glm::vec2 centroid;
-	glm::vec2 direction; // normalized direction vector to where the street is
-	const struct district *owner;
+	glm::vec2 direction; // normalized direction vector to the closest street, if a parcel has a building on it it will be rotated in that direction
+	const struct district *quarter;
 };
 
 struct section {
@@ -54,13 +53,14 @@ struct district {
 
 class Sitemap {
 public:
-	std::vector<struct district> districts;
-	std::vector<struct junction> junctions;
-	std::vector<struct section> sections;
 	struct district *core;
 	std::vector<struct segment> highways;
 	std::vector<struct parcel> parcels;
 	long seed;
+	// graph structures
+	std::vector<struct district> districts;
+	std::vector<struct junction> junctions;
+	std::vector<struct section> sections;
 public:
 	Sitemap(long seed, struct rectangle area);
 	void make_diagram(void);

@@ -74,7 +74,7 @@ void draw_thick_line(int x0, int y0, int x1, int y1, int radius, unsigned char *
 
 void plant_trees(std::vector<glm::vec2> &tree_points, const Sitemap *map)
 {
-	float radius = 8.F;
+	float radius = 16.F;
 	auto mmin = std::array<float, 2>{{SITE_AREA.min.x, SITE_AREA.min.y}};
 	auto mmax = std::array<float, 2>{{SITE_AREA.max.x, SITE_AREA.max.y}};
 
@@ -93,7 +93,7 @@ void plant_trees(std::vector<glm::vec2> &tree_points, const Sitemap *map)
 				glm::vec2 b = {round(s->j0->position.x), round(s->j0->position.y)};
 				glm::vec2 c = {round(s->j1->position.x), round(s->j1->position.y)};
 				// if street
-				if (s->j0->street && s->j1->street) {
+				if (s->j0->street || s->j1->street) {
 					b = a + (0.9F * (b-a));
 					c = a + (0.9F * (c-a));
 				}
@@ -154,7 +154,6 @@ void print_site(const Sitemap *map)
 			draw_triangle(a, b, c, image.data, image.width, image.height, image.nchannels, color);
 			area += triangle_area(a, b, c);
 		}
-		printf("district area %f\n", area);
 		//draw_filled_circle(a.x, a.y, 1, image.data, image.width, image.height, image.nchannels, BLACK);
 	}
 	/*
@@ -216,10 +215,6 @@ void print_site(const Sitemap *map)
 		draw_line(parc.backleft.x, parc.backleft.y, parc.backright.x, parc.backright.y, image.data, image.width, image.height, image.nchannels, PURPLE);
 		draw_line(parc.backright.x, parc.backright.y, parc.frontleft.x, parc.frontleft.y, image.data, image.width, image.height, image.nchannels, PURPLE);
 		
-		draw_filled_circle(parc.frontleft.x, parc.frontleft.y, 1, image.data, image.width, image.height, image.nchannels, REDCOLOR);
-		draw_filled_circle(parc.frontright.x, parc.frontright.y, 1, image.data, image.width, image.height, image.nchannels, GRN);
-		draw_filled_circle(parc.backleft.x, parc.backleft.y, 1, image.data, image.width, image.height, image.nchannels, BLU);
-		draw_filled_circle(parc.backright.x, parc.backright.y, 1, image.data, image.width, image.height, image.nchannels, BLACK);
 	}
 	*/
 
@@ -339,7 +334,7 @@ int main(int argc, char *argv[])
 	std::mt19937 gen(rd());
 	std::uniform_int_distribution<long> dist;
 	long seed = dist(gen);
-//long seed = 6827093389560411570; // freezes
+	//long seed = 4207165172587737803; // inwardiness
 
 	std::cout << seed << std::endl;
 
