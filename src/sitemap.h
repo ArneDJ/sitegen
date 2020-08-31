@@ -49,6 +49,7 @@ struct district {
 	int radius; // distance to center in graph structure
 	float area;
 	bool wall;
+	glm::vec2 centroid;
 };
 
 class Sitemap {
@@ -64,6 +65,9 @@ public:
 public:
 	Sitemap(long seed, struct rectangle area);
 	void make_diagram(void);
+private:
+	struct rectangle area;
+private:
 	void make_districts(void);
 	void find_junction_radius(void);
 	void outline_walls(void);
@@ -71,6 +75,4 @@ public:
 	void make_highways(void);
 	void divide_parcels(void);
 	void divide_polygons(std::list<glm::vec2> start, const struct district *cell);
-private:
-	struct rectangle area;
 };

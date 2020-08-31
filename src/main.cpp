@@ -189,35 +189,6 @@ void print_site(const Sitemap *map)
 
 	draw_filled_circle(map->core->center.x, map->core->center.y, 4, image.data, image.width, image.height, image.nchannels, BLACK);
 
-	/*
-	for (const auto &sect : map->sections) {
-		if (sect.gateway) {
-			draw_thick_line(sect.d0->center.x, sect.d0->center.y, sect.d1->center.x, sect.d1->center.y, 6, image.data, image.width, image.height, image.nchannels, GRAY);
-			glm::vec2 outward = segment_midpoint(sect.d0->center, sect.d1->center);
-			glm::vec2 right = sect.d0->center - outward;
-			glm::vec2 a = sect.j0->position - right;;
-			glm::vec2 b = sect.j0->position + right;;
-			glm::vec2 c = sect.j1->position - right;;
-			glm::vec2 d = sect.j1->position + right;;
-			draw_thick_line(a.x, a.y, b.x, b.y, 1, image.data, image.width, image.height, image.nchannels, YELLOW);
-			draw_thick_line(c.x, c.y, d.x, d.y, 1, image.data, image.width, image.height, image.nchannels, YELLOW);
-			draw_thick_line(a.x, a.y, c.x, c.y, 1, image.data, image.width, image.height, image.nchannels, YELLOW);
-			draw_thick_line(b.x, b.y, d.x, d.y, 1, image.data, image.width, image.height, image.nchannels, YELLOW);
-		}
-	}
-	*/
-
-	printf("parcels %d\n", map->parcels.size());
-	/*
-	for (const auto &parc : map->parcels) {
-		draw_line(parc.frontleft.x, parc.frontleft.y, parc.frontright.x, parc.frontright.y, image.data, image.width, image.height, image.nchannels, PURPLE);
-		draw_line(parc.frontright.x, parc.frontright.y, parc.backleft.x, parc.backleft.y, image.data, image.width, image.height, image.nchannels, PURPLE);
-		draw_line(parc.backleft.x, parc.backleft.y, parc.backright.x, parc.backright.y, image.data, image.width, image.height, image.nchannels, PURPLE);
-		draw_line(parc.backright.x, parc.backright.y, parc.frontleft.x, parc.frontleft.y, image.data, image.width, image.height, image.nchannels, PURPLE);
-		
-	}
-	*/
-
 	// draw houses
 	//const float AREA_SMALL_HOUSE = 25.F;
 	const float SMALL_HOUSE_WIDTH = 5.F;
@@ -235,7 +206,7 @@ void print_site(const Sitemap *map)
 		float theta = atan2(parc.direction.y, parc.direction.x);
 		glm::vec2 perpleft = {-parc.direction.y, parc.direction.x};
 		glm::vec2 perpright = {parc.direction.y, -parc.direction.x};
-		if ((parc_width_front > LARGE_HOUSE_WIDTH || parc_width_back > LARGE_HOUSE_WIDTH) && (parc_height_left > LARGE_HOUSE_HEIGHT || parc_height_right > LARGE_HOUSE_HEIGHT)) {
+		if ((parc_width_front > LARGE_HOUSE_WIDTH && parc_width_back > LARGE_HOUSE_WIDTH) && (parc_height_left > LARGE_HOUSE_HEIGHT && parc_height_right > LARGE_HOUSE_HEIGHT)) {
 			//draw_filled_circle(parc.centroid.x, parc.centroid.y, 12, image.data, image.width, image.height, image.nchannels, PURPLE);
 			glm::vec2 a = parc.centroid + (0.5f*LARGE_HOUSE_HEIGHT)*parc.direction + (0.5f*LARGE_HOUSE_WIDTH)*perpleft;
 			glm::vec2 b = parc.centroid + (0.5f*LARGE_HOUSE_HEIGHT)*parc.direction + (0.5f*LARGE_HOUSE_WIDTH)*perpright;
@@ -335,6 +306,7 @@ int main(int argc, char *argv[])
 	std::uniform_int_distribution<long> dist;
 	long seed = dist(gen);
 	//long seed = 4207165172587737803; // inwardiness
+	//long seed = 6570940619616775359; // infinite
 
 	std::cout << seed << std::endl;
 

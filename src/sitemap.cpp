@@ -171,6 +171,7 @@ void Sitemap::make_diagram(void)
 			.radius = 0,
 			.area = 0.f,
 			.wall = false,
+			.centroid = {0.f, 0.f},
 		};
 
 		districts[cell.index] = d;
@@ -230,12 +231,18 @@ void Sitemap::make_diagram(void)
 
 	for (auto &d : districts) {
 		d. area = 0.f;
-		for (const auto &s : d.sections) {
+		for (const auto s : d.sections) {
 			d.area += triangle_area(d.center, s->j0->position, s->j1->position);
 		}
 		// sort the polygon vertices in order
 		// ugly syntax
 		std::sort(d.junctions.begin(), d.junctions.end(), std::bind(winding, std::placeholders::_1, std::placeholders::_2, d.center));
+		// calculate centroid
+		std::vector<glm::vec2> vertices;
+		for (const auto j : d.junctions) {
+			vertices.push_back(j->position);
+		}
+		d.centroid = polygon_centroid(vertices);
 	}
 }
 
@@ -498,8 +505,9 @@ void Sitemap::divide_parcels(void)
 		if (d.radius > 0 && d.radius < TOWN_DISTRICT_RADIUS) {
 			std::list<glm::vec2> polygon;
 			for (auto jun : d.junctions) {
-				glm::vec2 p = 0.9f * (jun->position - d.center);
-				polygon.push_back(d.center+p);
+				glm::vec2 p = jun->position - d.center;
+				glm::vec2 scaled = 0.9F * p;
+				polygon.push_back(d.center+scaled);
 			}
 			// set density
 			for (std::list<glm::vec2>::iterator it = polygon.begin(); it != polygon.end();) {
@@ -564,6 +572,8 @@ static struct chainsplit find_chainsplit(std::list<glm::vec2> &polygon, std::lis
 			}
 			left.push_back(*it);
 
+			//printf("%d\n", right.size());
+			//printf("%d\n", left.size());
 			std::vector<glm::vec2> rightpoints;
 			std::vector<glm::vec2> leftpoints;
 			for (auto point : right) {
@@ -604,10 +614,6 @@ static struct parcel make_parcel(glm::vec2 a, glm::vec2 b, glm::vec2 c, glm::vec
 	struct parcel par;
 
 	// find the front
-	//for (const auto sect : cell->sections) {
-	//}
-	// find the back
-	//
 	par.frontleft = d;
 	par.frontright = c;
 	par.backleft = b;
@@ -621,6 +627,7 @@ static struct parcel make_parcel(glm::vec2 a, glm::vec2 b, glm::vec2 c, glm::vec
 	vertices.push_back(par.backright);
 	par.centroid = polygon_centroid(vertices);
 	par.direction = glm::normalize(segment_midpoint(par.frontleft, par.frontright) - par.centroid);
+
 	return par;
 }
 
@@ -649,6 +656,18 @@ void Sitemap::divide_polygons(std::list<glm::vec2> start, const struct district 
 			struct parcel par = make_parcel(a, b, c, d, cell);
 			parcels.push_back(par);
 		} else if (polygon.size() > 4) {
+			// remove duplicates
+			for (std::list<glm::vec2>::iterator it = polygon.begin(); it != polygon.end(); ++it) {
+				std::list<glm::vec2>::iterator next = std::next(it);
+				if (next == polygon.end()) {
+					next = polygon.begin();
+				}
+				glm::vec2 a = *it;
+				glm::vec2 b = *next;
+				if (a.x == b.x && a.y == b.y) {
+					polygon.erase(next);
+				}
+			}
 			// of all the polygon segments find a point that lies on a perpendicular line to the segment that divides the polygon in two "almost equal" areas 
 			// sort from longest to shortest segment
 			std::vector<struct chainsegment> chainseg;
@@ -660,6 +679,7 @@ void Sitemap::divide_polygons(std::list<glm::vec2> start, const struct district 
 				chainseg.push_back((struct chainsegment){it, next, glm::distance(*it, *next)});
 			}
 			std::sort(chainseg.begin(), chainseg.end(), longest_segment);
+
 			for (auto &splitter : chainseg) {
 				struct chainsplit split = find_chainsplit(polygon, splitter.left, splitter.right);
 				// divide the polygon in two
@@ -701,7 +721,7 @@ void Sitemap::divide_polygons(std::list<glm::vec2> start, const struct district 
 
 				// best polygon split was found
 				// add the two halves of the polygon to the queue
-				if (arearight > 0.001f && arealeft > 0.001f) {
+				if (arearight > 1.f && arealeft > 1.f) {
 					queue.push(right);
 					queue.push(left);
 					break;
