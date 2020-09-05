@@ -314,5 +314,21 @@ int main(int argc, char *argv[])
 
 	print_site(&sitemap);
 
+/*
+	struct byteimage image = blank_byteimage(3, 32, 32);
+	glm::vec2 a = {roundf(1.1f), roundf(1.1f)};
+	glm::vec2 b = {roundf(1.3f), roundf(1.1f)};
+	glm::vec2 c = {roundf(1.1f), roundf(2.2f)};
+	draw_triangle(a, b, c, image.data, image.width, image.height, image.nchannels, PURPLE);
+	//plot(p.x, p.y, image.data, image.width, image.height, image.nchannels, PURPLE);
+	draw_line(a.x, a.y, b.x, b.y, image.data, image.width, image.height, image.nchannels, REDCOLOR);
+	draw_line(b.x, b.y, c.x, c.y, image.data, image.width, image.height, image.nchannels, REDCOLOR);
+	draw_line(c.x, c.y, a.x, a.y, image.data, image.width, image.height, image.nchannels, REDCOLOR);
+	stbi_flip_vertically_on_write(true);
+	stbi_write_png("diagram.png", image.width, image.height, image.nchannels, image.data, image.width*image.nchannels);
+
+	delete_byteimage(&image);
+	*/
+
 	return 0;
 }
