@@ -314,6 +314,8 @@ int main(int argc, char *argv[])
 
 	print_site(&sitemap);
 
+	// foo
+
 /*
 	struct byteimage image = blank_byteimage(3, 32, 32);
 	glm::vec2 a = {roundf(1.1f), roundf(1.1f)};

@@ -1,16 +1,17 @@
 CXX = g++
+
+OBJDIR = obj
 VPATH = src:
+
 OBJECTS = main.o geom.o imp.o voronoi.o sitemap.o
+OBJ = $(patsubst %,$(OBJDIR)/%,$(OBJECTS))
 
-site.out : $(OBJECTS)
-	$(CXX) -o site.out $(OBJECTS)
+$(OBJDIR)/%.o: %.cpp
+	$(CXX) -c -o $@ $<
 
-main.o : main.cpp
-geom.o : geom.cpp
-imp.o : imp.cpp
-voronoi.o : voronoi.cpp
-sitemap.o : sitemap.cpp
+site.out: $(OBJ)
+	$(CXX) -o $@ $^
 
 .PHONY : clean
 clean:
-	rm site.out -f *.o
+	rm site.out -f $(OBJDIR)/*.o

@@ -416,41 +416,6 @@ bool rectangle_inside_triangle(struct rectangle rect, struct triangle tri)
 	return false;
 }
 
-bool triangle_overlaps_rectangle(struct triangle tri, struct rectangle rect)
-{
-	// check if any of the triangle points are in rectangle
-	if (point_in_rectangle(tri.a, rect)) {
-		return true;
-	} else if (point_in_rectangle(tri.b, rect)) {
-		return true;
-	} else if (point_in_rectangle(tri.c, rect)) {
-		return true;
-	}
-
-	// the triangle can also be so big that the rectangle is inside of it
-	if (rectangle_inside_triangle(rect, tri)) {
-		return true;
-	}
-
-	// none of the points are in the rectangle but the sides can still intersect
-	struct segment S0 = { rect.min, {rect.min.x, rect.max.y} };
-	struct segment S1 = { {rect.min.x, rect.max.y}, rect.max };
-	struct segment S2 = { rect.max, {rect.max.x, rect.min.y} };
-	struct segment S3 = { {rect.max.x, rect.min.y}, rect.min };
-
-	if (segment_overlaps_triangle(S0, tri)) {
-		return true;
-	} else if (segment_overlaps_triangle(S1, tri)) {
-		return true;
-	} else if (segment_overlaps_triangle(S2, tri)) {
-		return true;
-	} else if (segment_overlaps_triangle(S3, tri)) {
-		return true;
-	}
-	
-	return false;
-}
-
 glm::vec3 barycentric(glm::vec3 a, glm::vec3 b, glm::vec3 c, glm::vec3 p)
 {
 	using namespace glm;

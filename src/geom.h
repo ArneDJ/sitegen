@@ -59,8 +59,6 @@ struct ray_triangle_intersection intersect_ray_in_triangle(glm::vec3 origin, glm
 
 bool point_in_triangle(glm::vec2 pt, struct triangle tri);
 
-bool triangle_overlaps_rectangle(struct triangle tri, struct rectangle rect);
-
 bool segment_overlaps_triangle(struct segment s, struct triangle tri);
 
 bool segment_overlaps_rectangle(struct segment s, struct rectangle rect);
