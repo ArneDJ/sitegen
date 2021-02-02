@@ -427,68 +427,6 @@ void Sitemap::outline_walls(size_t radius)
 	}
 }
 
-/*
-void Sitemap::outline_walls(void)
-{
-	for (auto &sect : sections) {
-		if (sect.d0->radius == WALL_RADIUS && sect.d1->radius == WALL_RADIUS) {
-			sect.wall = true;
-			sect.d0->wall = true;
-			sect.d1->wall = true;
-		} else {
-			sect.wall = false;
-		}
-	}
-
-	for (auto &sect : sections) {
-		sect.area = 0.f;
-		if (sect.wall) {
-			glm::vec2 outward = segment_midpoint(sect.d0->center, sect.d1->center);
-			glm::vec2 right = sect.d0->center - outward;
-			glm::vec2 a = sect.j0->position - right;;
-			glm::vec2 b = sect.j0->position + right;;
-			glm::vec2 c = sect.j1->position - right;;
-			glm::vec2 d = sect.j1->position + right;;
-			sect.area += triangle_area(a, c, d);
-			sect.area += triangle_area(a, d, b);
-		}
-	}
-
-	for (auto &j : junctions) {
-		// look if all 3 of the districts have walls
-		bool walls = true;
-		for (auto &d : j.districts) {
-			if (d->wall == false) {
-				walls = false;
-			}
-		}
-		// if it does remove the wall that is the closest to the core
-		if (walls) {
-			int minradius = MAX_CELLS;
-			struct district *target = nullptr;
-			for (auto d : j.districts) {
-				int max = 0;
-				for (auto &neighbor : d->neighbors) {
-					if (neighbor->radius > max) {
-						max = neighbor->radius;
-					}
-				}
-				if (max < minradius) {
-					minradius = max;
-					target = d;
-				}
-			}
-			if (target != nullptr) {
-				target->wall = false;
-				for (auto targetsect : target->sections) {
-					targetsect->wall = false;
-				}
-			}
-		}
-	}
-}
-*/
-
 void Sitemap::make_gateways(void)
 {
 	std::vector<struct section*> candidates;
