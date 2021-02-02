@@ -70,7 +70,7 @@ private:
 private:
 	void make_districts(void);
 	void find_junction_radius(void);
-	void outline_walls(void);
+	void outline_walls(size_t radius);
 	void make_gateways(void);
 	void make_highways(void);
 	void divide_parcels(void);

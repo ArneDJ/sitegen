@@ -26,6 +26,7 @@ unsigned char GRN[3] = {0, 255, 0};
 unsigned char YELLOW[3] = {255, 255, 0};
 unsigned char REDCOLOR[3] = {255, 0, 0};
 unsigned char BLU[3] = {0, 0, 255};
+unsigned char FUK[3] = {255, 0, 0};
 unsigned char DARKGREEN[3] = {0, 100, 0};
 
 void draw_filled_circle(int x0, int y0, int radius, unsigned char *image, int width, int height, int nchannels, unsigned char *color)
@@ -154,7 +155,9 @@ void print_site(const Sitemap *map)
 			draw_triangle(a, b, c, image.data, image.width, image.height, image.nchannels, color);
 			area += triangle_area(a, b, c);
 		}
-		//draw_filled_circle(a.x, a.y, 1, image.data, image.width, image.height, image.nchannels, BLACK);
+		if (d.radius == 2) {
+		//draw_filled_circle(a.x, a.y, 5, image.data, image.width, image.height, image.nchannels, FUK);
+		}
 	}
 	/*
 	for (const auto &sect : map->sections) {
@@ -305,32 +308,12 @@ int main(int argc, char *argv[])
 	std::mt19937 gen(rd());
 	std::uniform_int_distribution<long> dist;
 	long seed = dist(gen);
-	//long seed = 4207165172587737803; // inwardiness
-	//long seed = 6570940619616775359; // infinite
 
 	std::cout << seed << std::endl;
 
 	Sitemap sitemap = {seed, SITE_AREA};
 
 	print_site(&sitemap);
-
-	// foo
-
-/*
-	struct byteimage image = blank_byteimage(3, 32, 32);
-	glm::vec2 a = {roundf(1.1f), roundf(1.1f)};
-	glm::vec2 b = {roundf(1.3f), roundf(1.1f)};
-	glm::vec2 c = {roundf(1.1f), roundf(2.2f)};
-	draw_triangle(a, b, c, image.data, image.width, image.height, image.nchannels, PURPLE);
-	//plot(p.x, p.y, image.data, image.width, image.height, image.nchannels, PURPLE);
-	draw_line(a.x, a.y, b.x, b.y, image.data, image.width, image.height, image.nchannels, REDCOLOR);
-	draw_line(b.x, b.y, c.x, c.y, image.data, image.width, image.height, image.nchannels, REDCOLOR);
-	draw_line(c.x, c.y, a.x, a.y, image.data, image.width, image.height, image.nchannels, REDCOLOR);
-	stbi_flip_vertically_on_write(true);
-	stbi_write_png("diagram.png", image.width, image.height, image.nchannels, image.data, image.width*image.nchannels);
-
-	delete_byteimage(&image);
-	*/
 
 	return 0;
 }

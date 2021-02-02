@@ -3,6 +3,7 @@
 #include <queue>
 #include <algorithm>
 #include <unordered_map>
+#include <map>
 #include <list>
 #include <functional>
 #include <math.h>
@@ -27,6 +28,12 @@ struct chainsplit {
 	glm::vec2 point;
 	float arealeft;
 	float arearight;
+};
+
+struct hamnode {
+	int index;
+	struct hamnode *parent = nullptr;
+	std::vector<struct hamnode*> children;
 };
 
 static const size_t MAX_CELLS = 128;
@@ -108,6 +115,15 @@ static bool winding(struct junction *a, struct junction *b, glm::vec2 center)
 	return atan2(av.y, av.x) < atan2(ab.y, ab.x);
 }
 
+static struct hamnode *insert(struct hamnode *parent, int index)
+{
+	struct hamnode *node = new struct hamnode;
+	node->parent =  parent;
+	node->index = index;
+
+	return node;
+}
+
 Sitemap::Sitemap(long seed, struct rectangle area)
 {
 	this->seed = seed;
@@ -119,7 +135,7 @@ Sitemap::Sitemap(long seed, struct rectangle area)
 
 	find_junction_radius();
 
-	outline_walls();
+	outline_walls(WALL_RADIUS);
 
 	make_gateways();
 
@@ -314,6 +330,104 @@ void Sitemap::find_junction_radius(void)
 	}
 }
 
+void Sitemap::outline_walls(size_t radius)
+{
+	// City wall is a Hamiltonian path
+	std::map<std::pair<int, int>, bool> link; // two connected cells
+	for (auto &sect : sections) {
+		link[std::minmax(sect.d0->index, sect.d1->index)] = false;
+	}
+
+	size_t maxnodes = 0;
+	std::vector<struct hamnode*> nodes;
+	struct hamnode *start = nullptr;
+	struct hamnode *end = nullptr;
+	for (auto &d : districts) {
+		if (d.radius == radius) {
+			start = insert(nullptr, d.index);
+			nodes.push_back(start);
+			start->parent = start;
+			std::queue<struct hamnode*> queue;
+			queue.push(start);
+			while (!queue.empty()) {
+				struct hamnode *node = queue.front();
+				queue.pop();
+				const struct district *dist = &districts[node->index];
+				struct hamnode *finish = nullptr;
+				for (const auto neighbor : dist->neighbors) {
+					if (neighbor->index == start->index) {
+						// found a cyclic path
+						finish = node;
+					} else if (neighbor->radius == radius) {
+						// backtrack through the nodes and check if it has already been visited
+						bool visited = false;
+						struct hamnode *prev = node;
+						while (prev != start) {
+							if (prev->index == neighbor->index) {
+								visited = true;
+								break;
+							}
+							prev = prev->parent;
+						}
+						// if the node hasn't been visited add is at a child
+						if (visited == false) {
+							struct hamnode *child = insert(node, neighbor->index);
+							nodes.push_back(child);
+							node->children.push_back(child);
+							queue.push(child);
+						}
+					}
+				}
+				if (finish != nullptr) { // found a valid cyclic path
+					size_t nnodes = 0;
+					struct hamnode *node = finish;
+					while (node != start) {
+						node = node->parent;
+						nnodes++;
+					}
+					// largest cyclic path will be chosen
+					if (nnodes > maxnodes) {
+						maxnodes = nnodes;
+						end = finish;
+					}
+				}
+			}
+			break;
+		}
+	}
+	if (start != nullptr && end != nullptr) {
+		struct hamnode *node = end;
+		while (node != start) {
+			struct hamnode *parent = node->parent;
+			link[std::minmax(node->index, parent->index)] = true;
+			node = parent;
+		}
+		link[std::minmax(start->index, end->index)] = true;
+	}
+	for (int i = 0; i < nodes.size(); i++) {
+		delete nodes[i];
+	}
+
+	for (auto &sect : sections) {
+		sect.wall = link[std::minmax(sect.d0->index, sect.d1->index)];
+	}
+
+	for (auto &sect : sections) {
+		sect.area = 0.f;
+		if (sect.wall) {
+			glm::vec2 outward = segment_midpoint(sect.d0->center, sect.d1->center);
+			glm::vec2 right = sect.d0->center - outward;
+			glm::vec2 a = sect.j0->position - right;;
+			glm::vec2 b = sect.j0->position + right;;
+			glm::vec2 c = sect.j1->position - right;;
+			glm::vec2 d = sect.j1->position + right;;
+			sect.area += triangle_area(a, c, d);
+			sect.area += triangle_area(a, d, b);
+		}
+	}
+}
+
+/*
 void Sitemap::outline_walls(void)
 {
 	for (auto &sect : sections) {
@@ -326,7 +440,6 @@ void Sitemap::outline_walls(void)
 		}
 	}
 
-	/* TODO calculated area should be the rectangle INSIDE the walls */
 	for (auto &sect : sections) {
 		sect.area = 0.f;
 		if (sect.wall) {
@@ -374,6 +487,7 @@ void Sitemap::outline_walls(void)
 		}
 	}
 }
+*/
 
 void Sitemap::make_gateways(void)
 {

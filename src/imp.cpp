@@ -181,13 +181,13 @@ void draw_triangle(glm::vec2 a, glm::vec2 b, glm::vec2 c, unsigned char *image, 
 	}
 
 	int area = orient(a.x, a.y, b.x, b.y, c.x, c.y);
-	if (area == 0) { return; }
+	//if (area == 0) { return; }
 
 	// Compute triangle bounding box
-	int minX = min3((int)a.x, (int)b.x, (int)c.x);
-	int minY = min3((int)a.y, (int)b.y, (int)c.y);
-	int maxX = max3((int)a.x, (int)b.x, (int)c.x);
-	int maxY = max3((int)a.y, (int)b.y, (int)c.y);
+	int minX = min3(floor(a.x), floor(b.x), floor(c.x));
+	int minY = min3(floor(a.y), floor(b.y), floor(c.y));
+	int maxX = max3(floor(a.x), floor(b.x), floor(c.x));
+	int maxY = max3(floor(a.y), floor(b.y), floor(c.y));
 
 	// Clip against screen bounds
 	minX = std::max(minX, 0);
